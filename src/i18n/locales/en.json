@@ -1,0 +1,50 @@
+{
+  "app": {
+    "title": "WeatherFinder",
+    "destinationDetails": "Destination Details"
+  },
+  "map": {
+    "loadingLocation": "Loading your location...",
+    "locationNotAvailable": "Location not available",
+    "error": "Error",
+    "failedToLoadWeather": "Failed to load weather data"
+  },
+  "radius": {
+    "title": "Radius",
+    "inRadius": "in {{radius}} km radius"
+  },
+  "weather": {
+    "type": "Weather Type",
+    "all": "All",
+    "sunny": "Sunny",
+    "cloudy": "Cloudy",
+    "rainy": "Rainy",
+    "snowy": "Snowy",
+    "windy": "Windy"
+  },
+  "mapType": {
+    "standard": "Standard",
+    "mutedStandard": "Weather Map",
+    "satellite": "Satellite",
+    "hybrid": "Hybrid",
+    "terrain": "Terrain"
+  },
+  "destination": {
+    "stability": "Stability",
+    "humidity": "Humidity",
+    "wind": "Wind",
+    "forecast": "Forecast",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "day3": "Day 3",
+    "backToMap": "Back to Map",
+    "driveThere": "🚗 Drive There"
+  },
+  "language": {
+    "title": "Language",
+    "german": "Deutsch",
+    "english": "English",
+    "french": "Français"
+  }
+}
+
