@@ -7,9 +7,11 @@ import {
   Modal,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../theme/ThemeProvider';
 
 const OnboardingOverlay = ({ visible, onClose }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
 
   return (
     <Modal
@@ -19,29 +21,35 @@ const OnboardingOverlay = ({ visible, onClose }) => {
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.content}>
+        <View style={[styles.content, { backgroundColor: theme.surface }]}>
           <Text style={styles.emoji}>👋</Text>
-          <Text style={styles.title}>{t('onboarding.welcome')}</Text>
-          <Text style={styles.subtitle}>{t('onboarding.howItWorks')}</Text>
+          <Text style={[styles.title, { color: theme.text }]}>{t('onboarding.welcome')}</Text>
+          <Text style={[styles.subtitle, { color: theme.primary }]}>{t('onboarding.howItWorks')}</Text>
           
           <View style={styles.steps}>
             <View style={styles.step}>
-              <Text style={styles.stepNumber}>1</Text>
-              <Text style={styles.stepText}>{t('onboarding.step1')}</Text>
+              <Text style={[styles.stepNumber, { backgroundColor: theme.primary }]}>1</Text>
+              <Text style={[styles.stepText, { color: theme.text }]}>{t('onboarding.step1')}</Text>
             </View>
             
             <View style={styles.step}>
-              <Text style={styles.stepNumber}>2</Text>
-              <Text style={styles.stepText}>{t('onboarding.step2')}</Text>
+              <Text style={[styles.stepNumber, { backgroundColor: theme.primary }]}>2</Text>
+              <Text style={[styles.stepText, { color: theme.text }]}>{t('onboarding.step2')}</Text>
             </View>
             
             <View style={styles.step}>
-              <Text style={styles.stepNumber}>3</Text>
-              <Text style={styles.stepText}>{t('onboarding.step3')}</Text>
+              <Text style={[styles.stepNumber, { backgroundColor: theme.primary }]}>3</Text>
+              <Text style={[styles.stepText, { color: theme.text }]}>{t('onboarding.step3')}</Text>
             </View>
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={onClose}>
+          <TouchableOpacity 
+            style={[styles.button, { 
+              backgroundColor: theme.primary,
+              shadowColor: theme.primary
+            }]} 
+            onPress={onClose}
+          >
             <Text style={styles.buttonText}>{t('onboarding.letsGo')}</Text>
           </TouchableOpacity>
         </View>
@@ -59,7 +67,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   content: {
-    backgroundColor: '#fff',
     borderRadius: 20,
     padding: 30,
     width: '100%',
@@ -73,14 +80,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#000',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#2E7D32',
     marginBottom: 24,
     textAlign: 'center',
   },
@@ -98,7 +103,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#fff',
-    backgroundColor: '#2E7D32',
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -110,17 +114,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '500',
-    color: '#333',
     lineHeight: 26,
   },
   button: {
-    backgroundColor: '#2E7D32',
     paddingVertical: 20,
     paddingHorizontal: 40,
     borderRadius: 12,
     width: '100%',
     alignItems: 'center',
-    shadowColor: '#2E7D32',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

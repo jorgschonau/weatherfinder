@@ -18,9 +18,12 @@ A cross-platform mobile app built with React Native and Expo that helps you find
 npm install
 ```
 
-2. Get a free API key from [OpenWeatherMap](https://openweathermap.org/api) and add it to `src/services/weatherService.js`:
-```javascript
-const API_KEY = 'YOUR_OPENWEATHERMAP_API_KEY';
+2. Copy `.env.example` to `.env` and add your OpenWeatherMap API key:
+```bash
+cp .env.example .env
+```
+```
+OPENWEATHERMAP_API_KEY=your_real_key_here
 ```
 
 3. Start the development server:
@@ -32,6 +35,12 @@ npm start
 - Press `i` for iOS simulator
 - Press `a` for Android emulator
 - Scan QR code with Expo Go app on your physical device
+
+### Real weather data
+
+- `app.config.js` loads `OPENWEATHERMAP_API_KEY` via `dotenv` and exposes it through `expo-constants`.
+- `src/providers/weatherProvider.js` now calls OpenWeatherMap's `box/city` endpoint for radius queries and `onecall` for detailed forecasts.
+- The provider gracefully falls back to mock data when the key is missing or the API fails, so the app always remains runnable locally.
 
 ## Project Structure
 
