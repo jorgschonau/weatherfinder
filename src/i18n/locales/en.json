@@ -40,7 +40,11 @@
     "backToMap": "Back to Map",
     "driveThere": "🚗 Drive There",
     "navigationError": "Navigation Error",
-    "navigationErrorMessage": "Could not open navigation app. Please check if you have a maps app installed."
+    "navigationErrorMessage": "Could not open navigation app. Please check if you have a maps app installed.",
+    "loading": "Loading forecast...",
+    "errorTitle": "Error",
+    "errorMessage": "Failed to load forecast data. Please try again.",
+    "retry": "Retry"
   },
   "language": {
     "title": "Language",

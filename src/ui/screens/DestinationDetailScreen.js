@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,44 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 import { openInMaps, NavigationProvider } from '../../usecases/navigationUsecases';
+import { fetchDetailedForecast } from '../../providers/weatherProvider';
 
 const DestinationDetailScreen = ({ route, navigation }) => {
   const { t } = useTranslation();
   const { destination } = route.params;
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [forecast, setForecast] = useState(null);
+
+  const loadForecast = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const data = await fetchDetailedForecast(
+        destination.lat,
+        destination.lon,
+        destination.name
+      );
+      
+      setForecast(data);
+    } catch (err) {
+      console.error('Error fetching forecast:', err);
+      setError(err.message || t('destination.errorMessage'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadForecast();
+  }, [destination.lat, destination.lon]);
 
   const handleDriveThere = async () => {
     try {
@@ -28,32 +58,67 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#2E7D32" />
+        <Text style={styles.loadingText}>{t('destination.loading')}</Text>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorIcon}>⚠️</Text>
+        <Text style={styles.errorTitle}>{t('destination.errorTitle')}</Text>
+        <Text style={styles.errorMessage}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadForecast}>
+          <Text style={styles.retryButtonText}>{t('destination.retry')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.backButtonError}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonTextError}>{t('destination.backToMap')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Data state (forecast is loaded)
+  if (!forecast) {
+    return null;
+  }
+
   return (
     <ScrollView style={styles.container}>
-      <View style={[styles.header, { backgroundColor: getWeatherColor(destination.condition) }]}>
-        <Text style={styles.headerIcon}>{getWeatherIcon(destination.condition)}</Text>
-        <Text style={styles.headerTitle}>{destination.name}</Text>
-        <Text style={styles.headerSubtitle}>{destination.description}</Text>
+      <View style={[styles.header, { backgroundColor: getWeatherColor(forecast.condition) }]}>
+        <Text style={styles.headerIcon}>{getWeatherIcon(forecast.condition)}</Text>
+        <Text style={styles.headerTitle}>{forecast.name}</Text>
+        <Text style={styles.headerSubtitle}>{forecast.description}</Text>
       </View>
 
       <View style={styles.content}>
         <View style={styles.mainInfo}>
           <View style={styles.tempContainer}>
-            <Text style={styles.tempValue}>{destination.temperature}°</Text>
+            <Text style={styles.tempValue}>{forecast.temperature}°</Text>
             <Text style={styles.tempUnit}>C</Text>
           </View>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>{t('destination.stability')}</Text>
-              <Text style={styles.statValue}>{destination.stability}%</Text>
+              <Text style={styles.statValue}>{forecast.stability}%</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>{t('destination.humidity')}</Text>
-              <Text style={styles.statValue}>{destination.humidity}%</Text>
+              <Text style={styles.statValue}>{forecast.humidity}%</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>{t('destination.wind')}</Text>
-              <Text style={styles.statValue}>{destination.windSpeed} km/h</Text>
+              <Text style={styles.statValue}>{forecast.windSpeed} km/h</Text>
             </View>
           </View>
         </View>
@@ -63,25 +128,25 @@ const DestinationDetailScreen = ({ route, navigation }) => {
           
           <View style={styles.forecastItem}>
             <Text style={styles.forecastDay}>{t('destination.today')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(destination.forecast.today.condition)}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast.today.condition)}</Text>
             <Text style={styles.forecastTemp}>
-              {destination.forecast.today.high}° / {destination.forecast.today.low}°
+              {forecast.forecast.today.high}° / {forecast.forecast.today.low}°
             </Text>
           </View>
 
           <View style={styles.forecastItem}>
             <Text style={styles.forecastDay}>{t('destination.tomorrow')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(destination.forecast.tomorrow.condition)}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast.tomorrow.condition)}</Text>
             <Text style={styles.forecastTemp}>
-              {destination.forecast.tomorrow.high}° / {destination.forecast.tomorrow.low}°
+              {forecast.forecast.tomorrow.high}° / {forecast.forecast.tomorrow.low}°
             </Text>
           </View>
 
           <View style={styles.forecastItem}>
             <Text style={styles.forecastDay}>{t('destination.day3')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(destination.forecast.day3.condition)}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast.day3.condition)}</Text>
             <Text style={styles.forecastTemp}>
-              {destination.forecast.day3.high}° / {destination.forecast.day3.low}°
+              {forecast.forecast.day3.high}° / {forecast.forecast.day3.low}°
             </Text>
           </View>
         </View>
@@ -110,6 +175,56 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#D32F2F',
+    marginBottom: 12,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2E7D32',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  backButtonError: {
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
+  backButtonTextError: {
+    color: '#2E7D32',
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     padding: 30,

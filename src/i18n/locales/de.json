@@ -40,7 +40,11 @@
     "backToMap": "Zurück zur Karte",
     "driveThere": "🚗 Dorthin fahren",
     "navigationError": "Navigationsfehler",
-    "navigationErrorMessage": "Navigations-App konnte nicht geöffnet werden. Bitte überprüfen Sie, ob eine Karten-App installiert ist."
+    "navigationErrorMessage": "Navigations-App konnte nicht geöffnet werden. Bitte überprüfen Sie, ob eine Karten-App installiert ist.",
+    "loading": "Vorhersage wird geladen...",
+    "errorTitle": "Fehler",
+    "errorMessage": "Vorhersagedaten konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "retry": "Erneut versuchen"
   },
   "language": {
     "title": "Sprache",
