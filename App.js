@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import './src/i18n';
 import MapScreen from './src/ui/screens/MapScreen';
 import DestinationDetailScreen from './src/ui/screens/DestinationDetailScreen';
+import CommunityScreen from './src/ui/screens/CommunityScreen';
 
 const Stack = createStackNavigator();
 
@@ -33,6 +34,11 @@ function AppContent() {
         name="DestinationDetail" 
         component={DestinationDetailScreen}
         options={{ title: t('app.destinationDetails') }}
+      />
+      <Stack.Screen 
+        name="Community" 
+        component={CommunityScreen}
+        options={{ title: t('app.community') }}
       />
     </Stack.Navigator>
   );

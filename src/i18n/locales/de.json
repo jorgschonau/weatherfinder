@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "WeatherFinder",
-    "destinationDetails": "Ziel-Details"
+    "destinationDetails": "Ziel-Details",
+    "community": "Community"
   },
   "map": {
     "loadingLocation": "Lade deinen Standort...",
