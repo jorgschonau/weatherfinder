@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../theme/ThemeProvider';
 import { getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 
 const WEATHER_CONDITIONS = [
   { value: null, key: 'all', icon: '🌍' },
   { value: 'sunny', key: 'sunny', icon: '☀️' },
-  { value: 'cloudy', key: 'cloudy', icon: '☁️' },
   { value: 'rainy', key: 'rainy', icon: '🌧️' },
   { value: 'snowy', key: 'snowy', icon: '❄️' },
   { value: 'windy', key: 'windy', icon: '💨' },
@@ -14,17 +14,21 @@ const WEATHER_CONDITIONS = [
 
 const WeatherFilter = ({ selectedCondition, onConditionChange }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
   
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{t('weather.type')}</Text>
+      <Text style={[styles.label, { color: theme.text }]}>{t('weather.type')}</Text>
       <View style={styles.optionsContainer}>
         {WEATHER_CONDITIONS.map((condition) => (
           <TouchableOpacity
             key={condition.value || 'all'}
             style={[
               styles.option,
-              selectedCondition === condition.value && styles.optionSelected,
+              { 
+                backgroundColor: theme.background,
+                borderColor: selectedCondition === condition.value ? theme.primary : 'transparent'
+              }
             ]}
             onPress={() => onConditionChange(condition.value)}
           >
@@ -32,7 +36,11 @@ const WeatherFilter = ({ selectedCondition, onConditionChange }) => {
             <Text
               style={[
                 styles.optionText,
-                selectedCondition === condition.value && styles.optionTextSelected,
+                { color: theme.textSecondary },
+                selectedCondition === condition.value && { 
+                  color: theme.primary,
+                  fontWeight: '700'
+                },
               ]}
             >
               {t(`weather.${condition.key}`)}
@@ -49,44 +57,35 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
   },
   optionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  optionSelected: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#1976D2',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 56,
+    borderRadius: 28,
+    borderWidth: 3,
   },
   optionIcon: {
-    fontSize: 16,
-    marginRight: 4,
+    fontSize: 24,
+    marginRight: 6,
   },
   optionText: {
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#666',
-  },
-  optionTextSelected: {
-    color: '#1976D2',
   },
 });
 
 export default WeatherFilter;
+
 
 

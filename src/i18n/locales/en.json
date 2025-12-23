@@ -2,17 +2,20 @@
   "app": {
     "title": "WeatherFinder",
     "destinationDetails": "Destination Details",
-    "community": "Community"
+    "community": "Community",
+    "settings": "Settings"
   },
   "map": {
     "loadingLocation": "Loading your location...",
-    "locationNotAvailable": "Location not available",
+    "locationNotAvailable": "Location not available. Please allow location access in your settings.",
     "error": "Error",
-    "failedToLoadWeather": "Failed to load weather data"
+    "failedToLoadWeather": "Failed to load weather data. Please check your internet connection and try again."
   },
   "radius": {
     "title": "Radius",
-    "inRadius": "in {{radius}} km radius"
+    "inRadius": "in {{radius}} km radius",
+    "more": "More",
+    "less": "Less"
   },
   "weather": {
     "type": "Weather Type",
@@ -52,6 +55,21 @@
     "german": "Deutsch",
     "english": "English",
     "french": "Français"
+  },
+  "settings": {
+    "theme": "Theme",
+    "language": "Language",
+    "account": "Account",
+    "preferences": "Preferences",
+    "comingSoon": "Coming soon"
+  },
+  "onboarding": {
+    "welcome": "Welcome!",
+    "howItWorks": "How it works:",
+    "step1": "Select your desired radius and weather conditions",
+    "step2": "Tap on a location on the map for details",
+    "step3": "Use navigation to drive there",
+    "letsGo": "Let's Go!"
   }
 }
 

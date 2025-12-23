@@ -2,17 +2,20 @@
   "app": {
     "title": "WeatherFinder",
     "destinationDetails": "Détails de la destination",
-    "community": "Communauté"
+    "community": "Communauté",
+    "settings": "Paramètres"
   },
   "map": {
     "loadingLocation": "Chargement de votre position...",
-    "locationNotAvailable": "Position non disponible",
+    "locationNotAvailable": "Position non disponible. Veuillez autoriser l'accès à la localisation dans les paramètres.",
     "error": "Erreur",
-    "failedToLoadWeather": "Échec du chargement des données météo"
+    "failedToLoadWeather": "Échec du chargement des données météo. Veuillez vérifier votre connexion Internet et réessayer."
   },
   "radius": {
     "title": "Rayon",
-    "inRadius": "dans un rayon de {{radius}} km"
+    "inRadius": "dans un rayon de {{radius}} km",
+    "more": "Plus",
+    "less": "Moins"
   },
   "weather": {
     "type": "Type de temps",
@@ -52,6 +55,21 @@
     "german": "Deutsch",
     "english": "English",
     "french": "Français"
+  },
+  "settings": {
+    "theme": "Thème",
+    "language": "Langue",
+    "account": "Compte",
+    "preferences": "Préférences",
+    "comingSoon": "Bientôt disponible"
+  },
+  "onboarding": {
+    "welcome": "Bienvenue!",
+    "howItWorks": "Comment ça marche:",
+    "step1": "Sélectionnez votre rayon et la météo souhaitée",
+    "step2": "Appuyez sur un lieu sur la carte pour les détails",
+    "step3": "Utilisez la navigation pour vous y rendre",
+    "letsGo": "C'est parti!"
   }
 }
 

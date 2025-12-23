@@ -7,15 +7,19 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../theme/ThemeProvider';
 import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 
 const MapScreen = ({ navigation }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
   const mapRef = useRef(null);
   const [location, setLocation] = useState(null);
   const [destinations, setDestinations] = useState([]);
@@ -23,9 +27,17 @@ const MapScreen = ({ navigation }) => {
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mapType, setMapType] = useState('standard'); // standard, satellite, hybrid, terrain, mutedStandard
+  const [controlsExpanded, setControlsExpanded] = useState(true); // Controls einklappbar
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     (async () => {
+      // Check if first time user
+      const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
+      if (!hasSeenOnboarding) {
+        setShowOnboarding(true);
+      }
+
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(t('map.error'), t('map.locationNotAvailable'));
@@ -54,7 +66,7 @@ const MapScreen = ({ navigation }) => {
           longitude: location.longitude,
           latitudeDelta: (radius * 2) / 111,
           longitudeDelta: (radius * 2) / (111 * Math.cos(location.latitude * Math.PI / 180)),
-        }, 500);
+        }, 600); // Langsamere Animation (600ms statt 500ms)
       }
     }
   }, [location, radius, selectedCondition]);
@@ -93,6 +105,17 @@ const MapScreen = ({ navigation }) => {
     setRadius(Math.max(newRadius, 10)); // Min 10 km
   };
 
+  const handleCloseOnboarding = async () => {
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+    setShowOnboarding(false);
+  };
+
+  const getStabilitySymbol = (stability) => {
+    if (stability >= 75) return '='; // Stabil
+    if (stability >= 55) return '↑'; // Tendenz besser
+    return '↓'; // Tendenz schlechter
+  };
+
   const toggleMapType = () => {
     const mapTypes = ['standard', 'mutedStandard', 'satellite', 'hybrid', 'terrain'];
     const currentIndex = mapTypes.indexOf(mapType);
@@ -106,23 +129,28 @@ const MapScreen = ({ navigation }) => {
 
   if (loading && !location) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2E7D32" />
-        <Text style={styles.loadingText}>{t('map.loadingLocation')}</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={[styles.loadingText, { color: theme.text }]}>{t('map.loadingLocation')}</Text>
       </View>
     );
   }
 
   if (!location) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>{t('map.locationNotAvailable')}</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <Text style={[styles.errorText, { color: theme.error }]}>{t('map.locationNotAvailable')}</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <OnboardingOverlay 
+        visible={showOnboarding} 
+        onClose={handleCloseOnboarding}
+      />
+      
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -159,41 +187,99 @@ const MapScreen = ({ navigation }) => {
               <Text style={styles.markerWeatherIcon}>{getWeatherIcon(dest.condition)}</Text>
               <Text style={styles.markerTemp}>{dest.temperature}°</Text>
               <View style={styles.stabilityBadge}>
-                <Text style={styles.stabilityText}>{dest.stability}%</Text>
+                <Text style={styles.stabilityText}>{getStabilitySymbol(dest.stability)}</Text>
               </View>
             </View>
           </Marker>
         ))}
       </MapView>
 
-      <View style={styles.controlsContainer}>
-        <RadiusSelector selectedRadius={radius} onRadiusChange={setRadius} />
-        <WeatherFilter
-          selectedCondition={selectedCondition}
-          onConditionChange={setSelectedCondition}
-        />
+      {/* Settings Button */}
+      <TouchableOpacity
+        style={[styles.settingsButton, { 
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}
+        onPress={() => navigation.navigate('Settings')}
+      >
+        <Text style={styles.settingsIcon}>⚙️</Text>
+      </TouchableOpacity>
+
+      {/* Collapsible Controls */}
+      <View style={styles.controlsWrapper}>
+        <TouchableOpacity
+          style={[styles.controlsToggle, {
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            shadowColor: theme.shadow
+          }]}
+          onPress={() => setControlsExpanded(!controlsExpanded)}
+        >
+          <Text style={[styles.controlsToggleText, { color: theme.text }]}>
+            {controlsExpanded ? '▼ Filter' : '▶ Filter'}
+          </Text>
+        </TouchableOpacity>
+        
+        {controlsExpanded && (
+          <View style={[styles.controlsContainer, {
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            shadowColor: theme.shadow
+          }]}>
+            <RadiusSelector selectedRadius={radius} onRadiusChange={setRadius} />
+            <WeatherFilter
+              selectedCondition={selectedCondition}
+              onConditionChange={setSelectedCondition}
+            />
+          </View>
+        )}
       </View>
 
-      <View style={styles.radiusControls}>
-        <TouchableOpacity
-          style={[styles.radiusButton, styles.radiusButtonTop]}
-          onPress={handleRadiusIncrease}
-        >
-          <Text style={styles.radiusButtonText}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.radiusButton, styles.radiusButtonBottom]}
-          onPress={handleRadiusDecrease}
-        >
-          <Text style={styles.radiusButtonText}>−</Text>
-        </TouchableOpacity>
+      <View style={styles.radiusControlsWrapper}>
+        <View style={[styles.radiusDisplay, {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}>
+          <Text style={[styles.radiusLabel, { color: theme.textTertiary }]}>{t('radius.title')}</Text>
+          <Text style={[styles.radiusDisplayText, { color: theme.text }]}>{radius} km</Text>
+        </View>
+        <View style={[styles.radiusControls, {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}>
+          <TouchableOpacity
+            style={[styles.radiusButton, styles.radiusButtonTop, {
+              backgroundColor: theme.background
+            }]}
+            onPress={handleRadiusIncrease}
+          >
+            <Text style={[styles.radiusButtonText, { color: theme.text }]}>+</Text>
+            <Text style={[styles.radiusButtonLabel, { color: theme.textSecondary }]}>{t('radius.more')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.radiusButton, styles.radiusButtonBottom, {
+              backgroundColor: theme.background
+            }]}
+            onPress={handleRadiusDecrease}
+          >
+            <Text style={[styles.radiusButtonText, { color: theme.text }]}>−</Text>
+            <Text style={[styles.radiusButtonLabel, { color: theme.textSecondary }]}>{t('radius.less')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <TouchableOpacity
-        style={styles.mapTypeButton}
+        style={[styles.mapTypeButton, {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}
         onPress={toggleMapType}
       >
-        <Text style={styles.mapTypeButtonText}>{getMapTypeLabel()}</Text>
+        <Text style={[styles.mapTypeIcon, { color: theme.text }]}>⧉</Text>
       </TouchableOpacity>
 
       {loading && (
@@ -216,35 +302,51 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 16,
-    color: '#666',
+    fontSize: 20,
+    fontWeight: '500',
   },
   errorText: {
-    fontSize: 16,
-    color: '#D32F2F',
+    fontSize: 20,
+    fontWeight: '600',
   },
-  controlsContainer: {
+  controlsWrapper: {
     position: 'absolute',
     top: 10,
     left: 10,
-    right: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    right: 80,
+  },
+  controlsToggle: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 12,
-    padding: 12,
-    shadowColor: '#000',
+    borderWidth: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  controlsToggleText: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  controlsContainer: {
+    marginTop: 10,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 3,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
   markerContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
@@ -256,31 +358,39 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   markerWeatherIcon: {
-    fontSize: 29,
+    fontSize: 28,
   },
   markerTemp: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#000',
-    marginTop: -5,
-    textShadowColor: 'rgba(255, 255, 255, 0.8)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 3,
+    marginTop: 2,
+    textShadowColor: '#fff',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   stabilityBadge: {
     position: 'absolute',
-    bottom: -5,
+    bottom: -18,
     backgroundColor: '#2E7D32',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 2,
     borderColor: '#fff',
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stabilityText: {
-    fontSize: 8,
+    fontSize: 18,
     color: '#fff',
     fontWeight: 'bold',
+    lineHeight: 18,
   },
   loadingOverlay: {
     position: 'absolute',
@@ -292,16 +402,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
   },
-  radiusControls: {
+  radiusControlsWrapper: {
     position: 'absolute',
     bottom: 50,
     right: 20,
+    alignItems: 'center',
+  },
+  radiusDisplay: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 3,
+    marginBottom: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+    alignItems: 'center',
+  },
+  radiusLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  radiusDisplayText: {
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  radiusControls: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderRadius: 10,
     borderWidth: 3,
-    borderColor: '#424242',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -309,11 +442,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   radiusButton: {
-    width: 40,
-    height: 40,
+    width: 70,
+    height: 70,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
     borderWidth: 1,
     borderColor: '#BDBDBD',
   },
@@ -334,34 +466,60 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   radiusButtonText: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '600',
-    color: '#212121',
-    lineHeight: 22,
+    lineHeight: 28,
+  },
+  radiusButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   mapTypeButton: {
     position: 'absolute',
     bottom: 50,
     left: 20,
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#424242',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
   },
-  mapTypeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#212121',
+  mapTypeIcon: {
+    fontSize: 36,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  settingsIcon: {
+    fontSize: 36,
+    textAlign: 'center',
+    lineHeight: 36,
+    includeFontPadding: false,
+    marginTop: 4,
   },
 });
 
 export default MapScreen;
+
 
 

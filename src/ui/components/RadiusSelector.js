@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../theme/ThemeProvider';
 
 const RADIUS_OPTIONS = [200, 400, 600, 1500, 3000];
 
 const RadiusSelector = ({ selectedRadius, onRadiusChange }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
 
   const handleSelectRadius = (radius) => {
@@ -15,15 +17,18 @@ const RadiusSelector = ({ selectedRadius, onRadiusChange }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{t('radius.title')}</Text>
+      <Text style={[styles.label, { color: theme.text }]}>{t('radius.title')}</Text>
       <TouchableOpacity
-        style={styles.radiusButton}
+        style={[styles.radiusButton, {
+          backgroundColor: theme.surface,
+          borderColor: theme.border
+        }]}
         onPress={() => setModalVisible(true)}
       >
-        <Text style={styles.radiusButtonText}>
+        <Text style={[styles.radiusButtonText, { color: theme.text }]}>
           {t('radius.inRadius', { radius: selectedRadius })}
         </Text>
-        <Text style={styles.arrow}>▼</Text>
+        <Text style={[styles.arrow, { color: theme.textSecondary }]}>▼</Text>
       </TouchableOpacity>
 
       <Modal
@@ -37,24 +42,28 @@ const RadiusSelector = ({ selectedRadius, onRadiusChange }) => {
           activeOpacity={1}
           onPress={() => setModalVisible(false)}
         >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('radius.title')}</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.modalTitle, { 
+              color: theme.text,
+              borderBottomColor: theme.border
+            }]}>{t('radius.title')}</Text>
             {RADIUS_OPTIONS.map((radius) => (
               <TouchableOpacity
                 key={radius}
-                style={styles.modalOption}
+                style={[styles.modalOption, { borderBottomColor: theme.background }]}
                 onPress={() => handleSelectRadius(radius)}
               >
                 <Text
                   style={[
                     styles.modalOptionText,
-                    selectedRadius === radius && styles.modalOptionTextSelected,
+                    { color: theme.text },
+                    selectedRadius === radius && { fontWeight: '700', color: theme.primary },
                   ]}
                 >
                   {radius} km
                 </Text>
                 {selectedRadius === radius && (
-                  <Text style={styles.checkmark}>✓</Text>
+                  <Text style={[styles.checkmark, { color: theme.primary }]}>✓</Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -70,35 +79,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
   },
   radiusButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    minHeight: 64,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderWidth: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   radiusButtonText: {
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#333',
   },
   arrow: {
-    fontSize: 10,
-    color: '#666',
+    fontSize: 16,
     marginLeft: 8,
   },
   modalOverlay: {
@@ -108,7 +113,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderRadius: 16,
     width: '80%',
     maxWidth: 400,
@@ -120,38 +124,32 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '700',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    paddingVertical: 20,
+    borderBottomWidth: 2,
   },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 24,
+    minHeight: 72,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
   },
   modalOptionText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  modalOptionTextSelected: {
-    fontWeight: '600',
-    color: '#2E7D32',
+    fontSize: 22,
+    fontWeight: '500',
   },
   checkmark: {
-    fontSize: 18,
-    color: '#2E7D32',
+    fontSize: 28,
     fontWeight: 'bold',
   },
 });
 
 export default RadiusSelector;
+
 
 

@@ -15,3 +15,4 @@ export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCon
 export { getWeatherIcon, getWeatherColor };
 
 
+
