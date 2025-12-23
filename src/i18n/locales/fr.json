@@ -38,7 +38,9 @@
     "tomorrow": "Demain",
     "day3": "Jour 3",
     "backToMap": "Retour à la carte",
-    "driveThere": "🚗 Aller là-bas"
+    "driveThere": "🚗 Aller là-bas",
+    "navigationError": "Erreur de navigation",
+    "navigationErrorMessage": "Impossible d'ouvrir l'application de navigation. Veuillez vérifier qu'une application de cartes est installée."
   },
   "language": {
     "title": "Langue",

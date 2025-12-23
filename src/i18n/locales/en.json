@@ -38,7 +38,9 @@
     "tomorrow": "Tomorrow",
     "day3": "Day 3",
     "backToMap": "Back to Map",
-    "driveThere": "🚗 Drive There"
+    "driveThere": "🚗 Drive There",
+    "navigationError": "Navigation Error",
+    "navigationErrorMessage": "Could not open navigation app. Please check if you have a maps app installed."
   },
   "language": {
     "title": "Language",

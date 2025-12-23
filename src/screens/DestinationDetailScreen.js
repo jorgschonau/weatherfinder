@@ -5,33 +5,27 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Linking,
-  Platform,
+  Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { getWeatherIcon, getWeatherColor } from '../services/weatherService';
+import { openInMaps, NavigationProvider } from '../integrations/navigation';
 
 const DestinationDetailScreen = ({ route, navigation }) => {
   const { t } = useTranslation();
   const { destination } = route.params;
 
-  const handleDriveThere = () => {
-    const { lat, lon } = destination;
-    const scheme = Platform.select({
-      ios: 'maps:0,0?q=',
-      android: 'geo:0,0?q=',
-    });
-    const latLng = `${lat},${lon}`;
-    const label = destination.name;
-    const url = Platform.select({
-      ios: `${scheme}${label}@${latLng}`,
-      android: `${scheme}${latLng}(${label})`,
-    });
-
-    Linking.openURL(url).catch((err) => {
-      // Fallback to Google Maps web
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lon}`);
-    });
+  const handleDriveThere = async () => {
+    try {
+      await openInMaps(destination, NavigationProvider.AUTO);
+    } catch (error) {
+      Alert.alert(
+        t('destination.navigationError'),
+        t('destination.navigationErrorMessage'),
+        [{ text: 'OK' }]
+      );
+      console.error('Navigation error:', error);
+    }
   };
 
   return (
