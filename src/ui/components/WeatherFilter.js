@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { getWeatherIcon, getWeatherColor } from '../services/weatherService';
+import { getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 
 const WEATHER_CONDITIONS = [
   { value: null, key: 'all', icon: '🌍' },
@@ -88,4 +88,5 @@ const styles = StyleSheet.create({
 });
 
 export default WeatherFilter;
+
 

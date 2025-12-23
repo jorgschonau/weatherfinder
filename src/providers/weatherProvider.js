@@ -1,4 +1,4 @@
-// Weather API service
+// External data source: Weather API provider
 // Note: You'll need to get a free API key from OpenWeatherMap or similar service
 // For demo purposes, we'll use mock data structure
 
@@ -9,10 +9,10 @@ const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 const generateMockWeatherData = (lat, lon, index) => {
   const conditions = ['sunny', 'cloudy', 'rainy', 'snowy', 'windy'];
   const condition = conditions[index % conditions.length];
-  
+
   const baseTemp = condition === 'snowy' ? -5 : condition === 'sunny' ? 25 : 15;
   const temp = baseTemp + (Math.random() * 10 - 5);
-  
+
   return {
     lat,
     lon,
@@ -31,53 +31,31 @@ const generateMockWeatherData = (lat, lon, index) => {
   };
 };
 
-export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCondition = null) => {
+/**
+ * Provider method: returns weather-enriched destinations in a radius (no domain filtering)
+ */
+export const fetchWeatherDestinationsForRadius = async (userLat, userLon, radiusKm) => {
   // In production, this would call a real weather API
   // For now, we'll generate mock destinations within the radius
-  
+
   const destinations = [];
   const numDestinations = Math.min(20, Math.floor(radiusKm / 50)); // More destinations for larger radius
-  
+
   for (let i = 0; i < numDestinations; i++) {
     // Generate random points within the radius
     const angle = Math.random() * 2 * Math.PI;
     const distance = Math.random() * radiusKm * 1000; // Convert to meters
     const latOffset = (distance * Math.cos(angle)) / 111000; // Rough conversion
     const lonOffset = (distance * Math.sin(angle)) / (111000 * Math.cos(userLat * Math.PI / 180));
-    
+
     const destLat = userLat + latOffset;
     const destLon = userLon + lonOffset;
-    
+
     const weather = generateMockWeatherData(destLat, destLon, i);
-    
-    // Filter by desired condition if specified
-    if (!desiredCondition || weather.condition === desiredCondition) {
-      destinations.push(weather);
-    }
+    destinations.push(weather);
   }
-  
+
   return destinations;
 };
 
-export const getWeatherIcon = (condition) => {
-  const icons = {
-    sunny: '☀️',
-    cloudy: '☁️',
-    rainy: '🌧️',
-    snowy: '❄️',
-    windy: '💨',
-  };
-  return icons[condition] || '☀️';
-};
-
-export const getWeatherColor = (condition) => {
-  const colors = {
-    sunny: '#FFA726',
-    cloudy: '#78909C',
-    rainy: '#42A5F5',
-    snowy: '#E1F5FE',
-    windy: '#B0BEC5',
-  };
-  return colors[condition] || '#FFA726';
-};
 

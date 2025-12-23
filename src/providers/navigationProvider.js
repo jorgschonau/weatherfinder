@@ -1,4 +1,4 @@
-import { Platform, Linking, Alert } from 'react-native';
+import { Platform, Linking } from 'react-native';
 
 /**
  * Navigation providers supported
@@ -76,7 +76,7 @@ const openAppleMaps = async (lat, lon, name) => {
  */
 const openGoogleMaps = async (lat, lon, name) => {
   const label = encodeURIComponent(name || 'Destination');
-  
+
   // Try native Google Maps app first
   const nativeUrl = Platform.select({
     ios: `comgooglemaps://?q=${lat},${lon}&center=${lat},${lon}&zoom=14`,
@@ -131,4 +131,5 @@ export const isNavigationProviderAvailable = async (provider) => {
     return false;
   }
 };
+
 

@@ -8,8 +8,8 @@ import {
   Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { getWeatherIcon, getWeatherColor } from '../services/weatherService';
-import { openInMaps, NavigationProvider } from '../integrations/navigation';
+import { getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
+import { openInMaps, NavigationProvider } from '../../usecases/navigationUsecases';
 
 const DestinationDetailScreen = ({ route, navigation }) => {
   const { t } = useTranslation();
@@ -262,4 +262,5 @@ const styles = StyleSheet.create({
 });
 
 export default DestinationDetailScreen;
+
 

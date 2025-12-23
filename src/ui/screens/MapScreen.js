@@ -10,7 +10,7 @@ import {
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
-import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../services/weatherService';
+import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
 
@@ -363,4 +363,5 @@ const styles = StyleSheet.create({
 });
 
 export default MapScreen;
+
 

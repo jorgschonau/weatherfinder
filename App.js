@@ -4,8 +4,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import './src/i18n';
-import MapScreen from './src/screens/MapScreen';
-import DestinationDetailScreen from './src/screens/DestinationDetailScreen';
+import MapScreen from './src/ui/screens/MapScreen';
+import DestinationDetailScreen from './src/ui/screens/DestinationDetailScreen';
 
 const Stack = createStackNavigator();
 
