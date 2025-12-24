@@ -3,7 +3,8 @@
     "title": "WeatherFinder",
     "destinationDetails": "Destination Details",
     "community": "Community",
-    "settings": "Settings"
+    "settings": "Settings",
+    "favourites": "Favourites"
   },
   "map": {
     "loadingLocation": "Loading your location...",
@@ -70,6 +71,17 @@
     "step2": "Tap on a location on the map for details",
     "step3": "Use navigation to drive there",
     "letsGo": "Let's Go!"
+  },
+  "favourites": {
+    "title": "Favourites",
+    "empty": "No favourites yet",
+    "emptyDescription": "Tap the star icon on a destination to save it here",
+    "addedToFavourites": "Added to favourites",
+    "removedFromFavourites": "Removed from favourites",
+    "alreadyInFavourites": "Already in favourites",
+    "viewDetails": "View Details",
+    "removeFromFavourites": "Remove from favourites",
+    "savedOn": "Saved on {{date}}"
   }
 }
 

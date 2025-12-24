@@ -3,7 +3,8 @@
     "title": "WeatherFinder",
     "destinationDetails": "Détails de la destination",
     "community": "Communauté",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "favourites": "Favoris"
   },
   "map": {
     "loadingLocation": "Chargement de votre position...",
@@ -70,6 +71,17 @@
     "step2": "Appuyez sur un lieu sur la carte pour les détails",
     "step3": "Utilisez la navigation pour vous y rendre",
     "letsGo": "C'est parti!"
+  },
+  "favourites": {
+    "title": "Favoris",
+    "empty": "Aucun favori",
+    "emptyDescription": "Appuyez sur l'icône étoile d'une destination pour l'enregistrer ici",
+    "addedToFavourites": "Ajouté aux favoris",
+    "removedFromFavourites": "Retiré des favoris",
+    "alreadyInFavourites": "Déjà dans les favoris",
+    "viewDetails": "Voir les détails",
+    "removeFromFavourites": "Retirer des favoris",
+    "savedOn": "Enregistré le {{date}}"
   }
 }
 

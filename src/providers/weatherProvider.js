@@ -71,12 +71,14 @@ const normalizeCoordinate = (coordValue) =>
 const adaptDestination = (city) => {
   const { coord = {}, main = {}, weather = [], wind = {}, clouds = {} } = city;
   const [weatherInfo] = weather;
+  
+  const mappedCondition = mapWeatherCondition(weatherInfo?.main, weatherInfo?.description);
 
   return {
     lat: normalizeCoordinate(coord.Lat ?? coord.lat),
     lon: normalizeCoordinate(coord.Lon ?? coord.lon),
     name: city.name || 'Unknown destination',
-    condition: mapWeatherCondition(weatherInfo?.main, weatherInfo?.description),
+    condition: mappedCondition,
     temperature: Math.round(main.temp ?? 0),
     humidity: main.humidity ?? 0,
     windSpeed: Math.round((wind.speed ?? 0) * 3.6),
@@ -184,12 +186,27 @@ const buildForecastFromResponse = (data, lat, lon, name) => {
   };
 };
 
-const generateMockWeatherData = (lat, lon, index) => {
+const generateMockWeatherData = (lat, lon, index, desiredCondition = null) => {
+  // Use coordinates as seed for deterministic "random" values
+  // This ensures same coordinates always generate same weather data
+  const seed = Math.abs(lat * lon * 1000) % 10000;
+  const seededRandom = (offset = 0) => ((seed + offset) % 100) / 100;
+  
   const conditions = ['sunny', 'cloudy', 'rainy', 'snowy', 'windy'];
-  const condition = conditions[index % conditions.length];
+  
+  // Determine condition index for forecast progression
+  const conditionIndex = Math.floor(seededRandom(1) * conditions.length);
+  
+  // If a specific condition is desired, use it for most mock data (80% chance)
+  let condition;
+  if (desiredCondition && seededRandom(0) < 0.8) {
+    condition = desiredCondition;
+  } else {
+    condition = conditions[conditionIndex];
+  }
 
   const baseTemp = condition === 'snowy' ? -5 : condition === 'sunny' ? 25 : 15;
-  const temp = baseTemp + (Math.random() * 10 - 5);
+  const temp = baseTemp + (seededRandom(2) * 10 - 5);
 
   return {
     lat,
@@ -197,9 +214,10 @@ const generateMockWeatherData = (lat, lon, index) => {
     name: `Destination ${index + 1}`,
     condition,
     temperature: Math.round(temp),
-    humidity: Math.round(50 + Math.random() * 30),
-    windSpeed: Math.round(5 + Math.random() * 20),
-    stability: Math.round(70 + Math.random() * 25),
+    humidity: Math.round(50 + seededRandom(3) * 30),
+    windSpeed: Math.round(5 + seededRandom(4) * 20),
+    stability: Math.round(70 + seededRandom(5) * 25),
+    isMockData: true, // Mark as mock for visual distinction
     forecast: {
       today: {
         condition,
@@ -208,13 +226,13 @@ const generateMockWeatherData = (lat, lon, index) => {
         low: Math.round(temp - 5),
       },
       tomorrow: {
-        condition: conditions[(index + 1) % conditions.length],
+        condition: conditions[(conditionIndex + 1) % conditions.length],
         temp: Math.round(temp + 2),
         high: Math.round(temp + 7),
         low: Math.round(temp - 3),
       },
       day3: {
-        condition: conditions[(index + 2) % conditions.length],
+        condition: conditions[(conditionIndex + 2) % conditions.length],
         temp: Math.round(temp - 1),
         high: Math.round(temp + 4),
         low: Math.round(temp - 6),
@@ -225,18 +243,39 @@ const generateMockWeatherData = (lat, lon, index) => {
   };
 };
 
-const generateMockDestinations = (lat, lon, radiusKm = 400, count = null) => {
+const generateMockDestinations = (lat, lon, radiusKm = 400, count = null, desiredCondition = null) => {
   const destinations = [];
   const numDestinations = count ?? Math.max(5, Math.min(20, Math.floor(radiusKm / 50)));
 
-  for (let i = 0; i < numDestinations; i++) {
-    const angle = Math.random() * 2 * Math.PI;
-    const distance = Math.random() * radiusKm * 1000;
-    const latOffset = (distance * Math.cos(angle)) / 111000;
-    const lonOffset =
-      (distance * Math.sin(angle)) / (111000 * Math.max(Math.cos(lat * Math.PI / 180), 0.1));
+  // Better distribution strategy: Use rings and sectors for even coverage
+  const numRings = Math.min(4, Math.ceil(numDestinations / 8)); // Divide into rings
+  const pointsPerRing = Math.ceil(numDestinations / numRings);
 
-    destinations.push(generateMockWeatherData(lat + latOffset, lon + lonOffset, i));
+  let pointIndex = 0;
+  for (let ring = 0; ring < numRings && pointIndex < numDestinations; ring++) {
+    // Distance for this ring: spread from 40% to 100% of radius
+    const minDistance = (0.4 + (ring / numRings) * 0.6) * radiusKm;
+    const maxDistance = (0.4 + ((ring + 1) / numRings) * 0.6) * radiusKm;
+    
+    const pointsInThisRing = Math.min(pointsPerRing, numDestinations - pointIndex);
+    
+    for (let p = 0; p < pointsInThisRing; p++) {
+      // Evenly distribute angles with some randomness
+      const baseAngle = (p / pointsInThisRing) * 2 * Math.PI;
+      const angleJitter = (Math.random() - 0.5) * 0.4; // Small random offset
+      const angle = baseAngle + angleJitter;
+      
+      // Random distance within ring with bias towards outer edge
+      const distanceRatio = 0.3 + Math.random() * 0.7; // Bias towards outer part of ring
+      const distance = (minDistance + distanceRatio * (maxDistance - minDistance)) * 1000;
+      
+      const latOffset = (distance * Math.cos(angle)) / 111000;
+      const lonOffset =
+        (distance * Math.sin(angle)) / (111000 * Math.max(Math.cos(lat * Math.PI / 180), 0.1));
+
+      destinations.push(generateMockWeatherData(lat + latOffset, lon + lonOffset, pointIndex, desiredCondition));
+      pointIndex++;
+    }
   }
 
   return destinations;
@@ -248,7 +287,8 @@ const getOpenWeatherApiKey = () =>
 export const fetchWeatherDestinationsForRadius = async (
   userLat,
   userLon,
-  radiusKm = 400
+  radiusKm = 400,
+  desiredCondition = null
 ) => {
   if (!isValidCoordinate(userLat) || !isValidCoordinate(userLon)) {
     return generateMockDestinations(0, 0, radiusKm);
@@ -263,42 +303,117 @@ export const fetchWeatherDestinationsForRadius = async (
     return generateMockDestinations(userLat, userLon, radiusKm);
   }
 
-  // OpenWeatherMap 'find' API: searches for cities within a radius
-  // Request maximum cities (API limit is 50)
-  const cnt = 50; // Always request max to get best coverage
-  const url = `${SEARCH_URL}?lat=${userLat}&lon=${userLon}&cnt=${cnt}&units=metric&appid=${apiKey}`;
+  // Multi-point search strategy: Search from center + 8 points around the radius
+  // When filtering is active, we need MORE cities because many will be filtered out
+  const hasFilter = Boolean(desiredCondition);
+  const searchMultiplier = hasFilter ? 2 : 1; // Double search points when filtering
+  
+  const searchPoints = [
+    { lat: userLat, lon: userLon, name: 'center' }, // Center point
+  ];
+  
+  // Add search points around the radius (8 normally, 16 when filtering)
+  const numDirections = hasFilter ? 16 : 8;
+  const searchRadiusFraction = 0.6; // Search from 60% of radius in each direction
+  
+  for (let i = 0; i < numDirections; i++) {
+    const angle = (i / numDirections) * 2 * Math.PI;
+    const searchDist = radiusKm * searchRadiusFraction * 1000; // meters
+    const latOffset = (searchDist * Math.cos(angle)) / 111000;
+    const lonOffset = (searchDist * Math.sin(angle)) / (111000 * Math.max(Math.cos(userLat * Math.PI / 180), 0.1));
+    searchPoints.push({
+      lat: userLat + latOffset,
+      lon: userLon + lonOffset,
+      name: `Dir${i}`
+    });
+  }
 
+  // Fetch cities from all search points
+  const allCitiesMap = new Map(); // Use Map to deduplicate by coordinates
+  
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`OpenWeatherMap returned ${response.status}`);
-    }
-
-    const data = await response.json();
+    const citiesPerPoint = hasFilter ? 20 : 10; // More cities when filtering
     
-    console.log(`📍 OpenWeatherMap returned ${data.list?.length || 0} cities`);
-    
-    let realCities = [];
-    if (Array.isArray(data.list) && data.list.length > 0) {
-      realCities = data.list
-        .map(adaptDestination)
-        .filter((dest) => dest.lat && dest.lon)
-        .filter((dest) => isWithinRadius(userLat, userLon, dest.lat, dest.lon, radiusKm));
+    const fetchPromises = searchPoints.map(async (point) => {
+      const cnt = citiesPerPoint;
+      const url = `${SEARCH_URL}?lat=${point.lat}&lon=${point.lon}&cnt=${cnt}&units=metric&appid=${apiKey}`;
       
-      console.log(`✅ After filtering: ${realCities.length} real cities within radius`);
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return [];
+        
+        const data = await response.json();
+        return (data.list || []).map(adaptDestination);
+      } catch (err) {
+        console.warn(`Failed to fetch from ${point.name}:`, err.message);
+        return [];
+      }
+    });
+
+    const results = await Promise.all(fetchPromises);
+    
+    // Combine and deduplicate cities
+    results.flat().forEach((city) => {
+      if (city.lat && city.lon && isWithinRadius(userLat, userLon, city.lat, city.lon, radiusKm)) {
+        const key = `${city.lat.toFixed(3)},${city.lon.toFixed(3)}`; // Dedupe by rounded coords
+        if (!allCitiesMap.has(key)) {
+          allCitiesMap.set(key, {
+            ...city,
+            distance: getDistanceKm(userLat, userLon, city.lat, city.lon),
+          });
+        }
+      }
+    });
+    
+    const allCities = Array.from(allCitiesMap.values());
+
+    // Smart selection strategy:
+    // 1. Sort by temperature (warmest first)
+    // 2. Apply minimum distance filter (reduced when filtering to get more results)
+    // 3. Take top 30-50 cities
+    const realCities = [];
+    if (allCities && allCities.length > 0) {
+      const MIN_DISTANCE_KM = hasFilter ? 15 : 20; // Reduce min distance when filtering
+      const MAX_CITIES = hasFilter ? 60 : Math.min(50, Math.max(30, Math.floor(radiusKm / 15))); // More cities when filtering
+      
+      // Sort by temperature descending (warmest first)
+      const sortedByTemp = [...allCities].sort((a, b) => b.temperature - a.temperature);
+      
+      // Select cities with minimum distance constraint
+      for (const city of sortedByTemp) {
+        if (realCities.length >= MAX_CITIES) break;
+        
+        // Check if this city is too close to any already selected city
+        const tooClose = realCities.some((selected) => {
+          const dist = getDistanceKm(city.lat, city.lon, selected.lat, selected.lon);
+          return dist < MIN_DISTANCE_KM;
+        });
+        
+        if (!tooClose) {
+          realCities.push(city);
+        }
+      }
+      
     }
 
-    // Hybrid mode: Add mock destinations to fill the radius nicely
-    const desiredTotal = Math.max(15, Math.min(30, Math.floor(radiusKm / 30)));
+    // Hybrid mode: When filtering is active, ALWAYS add mock destinations
+    // because real cities often don't match the filter (e.g. all cloudy today)
+    if (hasFilter) {
+      const mockCount = Math.max(20, Math.floor(radiusKm / 20)); // Always 20+ mocks when filtering
+      const mockDestinations = generateMockDestinations(userLat, userLon, radiusKm, mockCount, desiredCondition);
+      return [...realCities, ...mockDestinations];
+    }
+    
+    // No filter: add mocks only if needed
+    const desiredTotal = Math.max(25, Math.min(35, Math.floor(radiusKm / 25)));
     const mockCount = Math.max(0, desiredTotal - realCities.length);
     
     if (mockCount > 0) {
-      console.log(`➕ Adding ${mockCount} mock destinations for better coverage`);
       const mockDestinations = generateMockDestinations(userLat, userLon, radiusKm, mockCount);
       return [...realCities, ...mockDestinations];
     }
-
-    return realCities.length > 0 ? realCities : generateMockDestinations(userLat, userLon, radiusKm);
+    
+    return realCities;
   } catch (error) {
     console.warn('Failed to load destinations from OpenWeatherMap', error);
     return generateMockDestinations(userLat, userLon, radiusKm);
@@ -306,11 +421,16 @@ export const fetchWeatherDestinationsForRadius = async (
 };
 
 const buildMockForecast = (lat, lon, name) => {
-  const index = Math.floor(Math.abs(lat * lon * 1000)) % 100;
+  // Use same deterministic seed logic as generateMockWeatherData
+  const seed = Math.abs(lat * lon * 1000) % 10000;
+  const seededRandom = (offset = 0) => ((seed + offset) % 100) / 100;
+  
   const conditions = ['sunny', 'cloudy', 'rainy', 'snowy', 'windy'];
-  const condition = conditions[index % conditions.length];
+  const conditionIndex = Math.floor(seededRandom(1) * conditions.length);
+  const condition = conditions[conditionIndex];
+  
   const baseTemp = condition === 'snowy' ? -5 : condition === 'sunny' ? 25 : 15;
-  const temp = baseTemp + (Math.abs(lat) % 10);
+  const temp = baseTemp + (seededRandom(2) * 10 - 5);
 
   return {
     lat,
@@ -318,9 +438,10 @@ const buildMockForecast = (lat, lon, name) => {
     name: name || `Location at ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
     condition,
     temperature: Math.round(temp),
-    humidity: Math.round(50 + (Math.abs(lon) % 30)),
-    windSpeed: Math.round(5 + (Math.abs(lat + lon) % 20)),
-    stability: Math.round(70 + (Math.abs(lat * 10) % 25)),
+    humidity: Math.round(50 + seededRandom(3) * 30),
+    windSpeed: Math.round(5 + seededRandom(4) * 20),
+    stability: Math.round(70 + seededRandom(5) * 25),
+    isMockData: true, // Mark as mock for visual distinction
     forecast: {
       today: {
         condition,
@@ -329,13 +450,13 @@ const buildMockForecast = (lat, lon, name) => {
         low: Math.round(temp - 5),
       },
       tomorrow: {
-        condition: conditions[(index + 1) % conditions.length],
+        condition: conditions[(conditionIndex + 1) % conditions.length],
         temp: Math.round(temp + 2),
         high: Math.round(temp + 7),
         low: Math.round(temp - 3),
       },
       day3: {
-        condition: conditions[(index + 2) % conditions.length],
+        condition: conditions[(conditionIndex + 2) % conditions.length],
         temp: Math.round(temp - 1),
         high: Math.round(temp + 4),
         low: Math.round(temp - 6),

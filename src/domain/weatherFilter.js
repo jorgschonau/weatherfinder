@@ -4,7 +4,10 @@
  */
 export const filterDestinationsByCondition = (destinations, desiredCondition = null) => {
   if (!desiredCondition) return destinations;
-  return destinations.filter((d) => d.condition === desiredCondition);
+  
+  // Case-insensitive filtering
+  const normalizedCondition = desiredCondition.toLowerCase();
+  return destinations.filter((d) => d.condition?.toLowerCase() === normalizedCondition);
 };
 
 

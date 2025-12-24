@@ -29,6 +29,7 @@ const MapScreen = ({ navigation }) => {
   const [mapType, setMapType] = useState('standard'); // standard, satellite, hybrid, terrain, mutedStandard
   const [controlsExpanded, setControlsExpanded] = useState(true); // Controls einklappbar
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showMockData, setShowMockData] = useState(true); // Toggle for mock data (temp for testing)
 
   useEffect(() => {
     (async () => {
@@ -177,13 +178,18 @@ const MapScreen = ({ navigation }) => {
             fillColor="rgba(66, 66, 66, 0.2)"
           />
         )}
-        {destinations.map((dest, index) => (
+        {destinations
+          .filter(dest => showMockData || !dest.isMockData) // Filter mock data based on toggle
+          .map((dest, index) => (
           <Marker
             key={index}
             coordinate={{ latitude: dest.lat, longitude: dest.lon }}
             onPress={() => handleMarkerPress(dest)}
           >
-            <View style={[styles.markerContainer, { backgroundColor: getWeatherColor(dest.condition) }]}>
+            <View style={[
+              styles.markerContainer, 
+              { backgroundColor: getWeatherColor(dest.condition) }
+            ]}>
               <Text style={styles.markerWeatherIcon}>{getWeatherIcon(dest.condition)}</Text>
               <Text style={styles.markerTemp}>{dest.temperature}°</Text>
               <View style={styles.stabilityBadge}>
@@ -193,6 +199,30 @@ const MapScreen = ({ navigation }) => {
           </Marker>
         ))}
       </MapView>
+
+      {/* Favourites Button */}
+      <TouchableOpacity
+        style={[styles.favouritesButton, { 
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}
+        onPress={() => navigation.navigate('Favourites')}
+      >
+        <Text style={styles.favouritesIcon}>⭐</Text>
+      </TouchableOpacity>
+
+      {/* Mock Data Toggle Button (temp for testing) */}
+      <TouchableOpacity
+        style={[styles.mockToggleButton, { 
+          backgroundColor: showMockData ? theme.primary : theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}
+        onPress={() => setShowMockData(!showMockData)}
+      >
+        <Text style={[styles.mockToggleIcon, { color: showMockData ? '#fff' : theme.text }]}>🎲</Text>
+      </TouchableOpacity>
 
       {/* Settings Button */}
       <TouchableOpacity
@@ -493,6 +523,50 @@ const styles = StyleSheet.create({
   mapTypeIcon: {
     fontSize: 36,
     textAlign: 'center',
+    marginTop: 4,
+  },
+  favouritesButton: {
+    position: 'absolute',
+    top: 84,
+    right: 10,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  favouritesIcon: {
+    fontSize: 36,
+    textAlign: 'center',
+    lineHeight: 36,
+    includeFontPadding: false,
+    marginTop: 4,
+  },
+  mockToggleButton: {
+    position: 'absolute',
+    top: 158,
+    right: 10,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  mockToggleIcon: {
+    fontSize: 36,
+    textAlign: 'center',
+    lineHeight: 36,
+    includeFontPadding: false,
     marginTop: 4,
   },
   settingsButton: {

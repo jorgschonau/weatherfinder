@@ -7,7 +7,8 @@ import { getWeatherIcon, getWeatherColor } from '../domain/weatherPresentation';
  * Signature preserved from old `services/weatherService.js` to avoid behavior changes.
  */
 export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCondition = null) => {
-  const destinations = await fetchWeatherDestinationsForRadius(userLat, userLon, radiusKm);
+  // Pass filter to provider so it can fetch more cities when filtering is active
+  const destinations = await fetchWeatherDestinationsForRadius(userLat, userLon, radiusKm, desiredCondition);
   return filterDestinationsByCondition(destinations, desiredCondition);
 };
 

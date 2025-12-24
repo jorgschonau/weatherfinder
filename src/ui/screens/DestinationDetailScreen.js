@@ -13,6 +13,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 import { openInMaps, NavigationProvider } from '../../usecases/navigationUsecases';
 import { fetchDetailedForecast } from '../../providers/weatherProvider';
+import { toggleFavourite, isDestinationFavourite } from '../../usecases/favouritesUsecases';
 
 const DestinationDetailScreen = ({ route, navigation }) => {
   const { t } = useTranslation();
@@ -22,19 +23,46 @@ const DestinationDetailScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [forecast, setForecast] = useState(null);
+  const [isFavourite, setIsFavourite] = useState(false);
+  const [favouriteLoading, setFavouriteLoading] = useState(false);
 
   const loadForecast = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const data = await fetchDetailedForecast(
-        destination.lat,
-        destination.lon,
-        destination.name
-      );
+      // If destination already has all forecast data (mock data or complete data), use it directly
+      if (destination.forecast) {
+        setForecast(destination);
+        setIsLoading(false);
+        return;
+      }
       
-      setForecast(data);
+      // Try to fetch detailed forecast for real cities
+      try {
+        const data = await fetchDetailedForecast(
+          destination.lat,
+          destination.lon,
+          destination.name
+        );
+        
+        // Prefer destination temperature if forecast is 0 (API issue)
+        if (data.temperature === 0 && destination.temperature !== 0) {
+          data.temperature = destination.temperature;
+        }
+        
+        setForecast(data);
+      } catch (fetchError) {
+        // Use destination as fallback with generated forecast
+        setForecast({
+          ...destination,
+          forecast: {
+            today: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
+            tomorrow: { condition: destination.condition, temp: destination.temperature + 1, high: destination.temperature + 4, low: destination.temperature - 2 },
+            day3: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
+          }
+        });
+      }
     } catch (err) {
       console.error('Error fetching forecast:', err);
       setError(err.message || t('destination.errorMessage'));
@@ -45,7 +73,35 @@ const DestinationDetailScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     loadForecast();
+    checkFavouriteStatus();
   }, [destination.lat, destination.lon]);
+
+  const checkFavouriteStatus = async () => {
+    const status = await isDestinationFavourite(destination.lat, destination.lon);
+    setIsFavourite(status);
+  };
+
+  const handleToggleFavourite = async () => {
+    if (favouriteLoading) return;
+    
+    setFavouriteLoading(true);
+    try {
+      const result = await toggleFavourite(forecast || destination);
+      setIsFavourite(result.isFavourite);
+      
+      // Show success message
+      Alert.alert(
+        result.isFavourite ? t('favourites.addedToFavourites') : t('favourites.removedFromFavourites'),
+        '',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Failed to toggle favourite:', error);
+      Alert.alert(t('map.error'), 'Failed to update favourites');
+    } finally {
+      setFavouriteLoading(false);
+    }
+  };
 
   const handleDriveThere = async () => {
     try {
@@ -171,6 +227,23 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             onPress={() => navigation.goBack()}
           >
             <Text style={[styles.backButtonText, { color: theme.primary }]}>{t('destination.backToMap')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.favouriteButton, {
+              backgroundColor: isFavourite ? theme.primary : theme.surface,
+              borderColor: theme.primary
+            }]}
+            onPress={handleToggleFavourite}
+            disabled={favouriteLoading}
+          >
+            {favouriteLoading ? (
+              <ActivityIndicator size="small" color={isFavourite ? '#fff' : theme.primary} />
+            ) : (
+              <Text style={[styles.favouriteButtonText, { color: isFavourite ? '#fff' : theme.primary }]}>
+                {isFavourite ? '⭐' : '☆'}
+              </Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -357,6 +430,19 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 20,
     fontWeight: '700',
+  },
+  favouriteButton: {
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    minHeight: 68,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+  },
+  favouriteButtonText: {
+    fontSize: 32,
+    fontWeight: 'bold',
   },
   driveButton: {
     paddingVertical: 20,

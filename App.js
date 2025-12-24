@@ -9,6 +9,7 @@ import MapScreen from './src/ui/screens/MapScreen';
 import DestinationDetailScreen from './src/ui/screens/DestinationDetailScreen';
 import CommunityScreen from './src/ui/screens/CommunityScreen';
 import SettingsScreen from './src/ui/screens/SettingsScreen';
+import FavouritesScreen from './src/ui/screens/FavouritesScreen';
 
 const Stack = createStackNavigator();
 
@@ -37,6 +38,11 @@ function AppContent() {
         name="DestinationDetail" 
         component={DestinationDetailScreen}
         options={{ title: t('app.destinationDetails') }}
+      />
+      <Stack.Screen 
+        name="Favourites" 
+        component={FavouritesScreen}
+        options={{ title: t('app.favourites') }}
       />
       <Stack.Screen 
         name="Community" 
