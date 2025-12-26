@@ -82,6 +82,14 @@
     "viewDetails": "Voir les détails",
     "removeFromFavourites": "Retirer des favoris",
     "savedOn": "Enregistré le {{date}}"
+  },
+  "badges": {
+    "worthTheDrive": "Vaut le détour",
+    "worthTheDriveDescription": "Meilleur gain météo par km",
+    "warmAndDry": "Chaud & Sec",
+    "warmAndDryDescription": "Chaleur maximale avec bonnes conditions",
+    "bestStop": "Meilleur arrêt",
+    "bestStopDescription": "Meilleur score: Météo + Environnement + Services"
   }
 }
 

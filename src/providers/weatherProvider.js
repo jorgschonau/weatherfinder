@@ -89,6 +89,7 @@ const adaptDestination = (city) => {
         100 - (clouds.all ?? 0) - Math.round((wind.speed ?? 0) * 2)
       )
     ),
+    badges: [], // Future: Will contain badge types (e.g., ['WORTH_THE_DRIVE', 'WARM_AND_DRY'])
   };
 };
 
@@ -218,6 +219,7 @@ const generateMockWeatherData = (lat, lon, index, desiredCondition = null) => {
     windSpeed: Math.round(5 + seededRandom(4) * 20),
     stability: Math.round(70 + seededRandom(5) * 25),
     isMockData: true, // Mark as mock for visual distinction
+    badges: [], // Future: Will contain badge types
     forecast: {
       today: {
         condition,
@@ -253,8 +255,10 @@ const generateMockDestinations = (lat, lon, radiusKm = 400, count = null, desire
 
   let pointIndex = 0;
   for (let ring = 0; ring < numRings && pointIndex < numDestinations; ring++) {
-    // Distance for this ring: spread from 40% to 100% of radius
-    const minDistance = (0.4 + (ring / numRings) * 0.6) * radiusKm;
+    // Distance for this ring: spread from 20km minimum to 100% of radius
+    // Don't generate points too close to starting location
+    const MIN_TRAVEL_DISTANCE_KM = 20;
+    const minDistance = Math.max(MIN_TRAVEL_DISTANCE_KM, (0.4 + (ring / numRings) * 0.6) * radiusKm);
     const maxDistance = (0.4 + ((ring + 1) / numRings) * 0.6) * radiusKm;
     
     const pointsInThisRing = Math.min(pointsPerRing, numDestinations - pointIndex);
@@ -301,6 +305,24 @@ export const fetchWeatherDestinationsForRadius = async (
       '⚠️ OpenWeatherMap API key is not configured, falling back to mock destinations'
     );
     return generateMockDestinations(userLat, userLon, radiusKm);
+  }
+
+  // First, fetch weather for user's current location for comparison
+  let currentLocationWeather = null;
+  try {
+    const currentUrl = `${API_BASE_URL}/weather?lat=${userLat}&lon=${userLon}&units=metric&appid=${apiKey}`;
+    const currentResponse = await fetch(currentUrl);
+    if (currentResponse.ok) {
+      const currentData = await currentResponse.json();
+      currentLocationWeather = {
+        ...adaptDestination(currentData),
+        name: `📍 ${currentData.name || 'Your Location'}`,
+        distance: 0,
+        isCurrentLocation: true,
+      };
+    }
+  } catch (error) {
+    console.warn('Could not fetch current location weather:', error.message);
   }
 
   // Multi-point search strategy: Search from center + 8 points around the radius
@@ -366,18 +388,24 @@ export const fetchWeatherDestinationsForRadius = async (
     });
     
     const allCities = Array.from(allCitiesMap.values());
+    
+    // Filter out cities too close to user location (< 20km) as they're not interesting for travel
+    const MIN_TRAVEL_DISTANCE_KM = 20;
+    const travelDestinations = allCities.filter(city => 
+      city.distance >= MIN_TRAVEL_DISTANCE_KM
+    );
 
     // Smart selection strategy:
     // 1. Sort by temperature (warmest first)
-    // 2. Apply minimum distance filter (reduced when filtering to get more results)
+    // 2. Apply minimum distance filter between markers (prevent clustering)
     // 3. Take top 30-50 cities
     const realCities = [];
-    if (allCities && allCities.length > 0) {
+    if (travelDestinations && travelDestinations.length > 0) {
       const MIN_DISTANCE_KM = hasFilter ? 15 : 20; // Reduce min distance when filtering
       const MAX_CITIES = hasFilter ? 60 : Math.min(50, Math.max(30, Math.floor(radiusKm / 15))); // More cities when filtering
       
       // Sort by temperature descending (warmest first)
-      const sortedByTemp = [...allCities].sort((a, b) => b.temperature - a.temperature);
+      const sortedByTemp = [...travelDestinations].sort((a, b) => b.temperature - a.temperature);
       
       // Select cities with minimum distance constraint
       for (const city of sortedByTemp) {
@@ -398,22 +426,29 @@ export const fetchWeatherDestinationsForRadius = async (
 
     // Hybrid mode: When filtering is active, ALWAYS add mock destinations
     // because real cities often don't match the filter (e.g. all cloudy today)
+    let allDestinations = [...realCities];
+    
+    // Always add current location as first destination for comparison
+    if (currentLocationWeather) {
+      allDestinations = [currentLocationWeather, ...realCities];
+    }
+    
     if (hasFilter) {
       const mockCount = Math.max(20, Math.floor(radiusKm / 20)); // Always 20+ mocks when filtering
       const mockDestinations = generateMockDestinations(userLat, userLon, radiusKm, mockCount, desiredCondition);
-      return [...realCities, ...mockDestinations];
+      return [...allDestinations, ...mockDestinations];
     }
     
     // No filter: add mocks only if needed
     const desiredTotal = Math.max(25, Math.min(35, Math.floor(radiusKm / 25)));
-    const mockCount = Math.max(0, desiredTotal - realCities.length);
+    const mockCount = Math.max(0, desiredTotal - allDestinations.length);
     
     if (mockCount > 0) {
       const mockDestinations = generateMockDestinations(userLat, userLon, radiusKm, mockCount);
-      return [...realCities, ...mockDestinations];
+      return [...allDestinations, ...mockDestinations];
     }
     
-    return realCities;
+    return allDestinations;
   } catch (error) {
     console.warn('Failed to load destinations from OpenWeatherMap', error);
     return generateMockDestinations(userLat, userLon, radiusKm);

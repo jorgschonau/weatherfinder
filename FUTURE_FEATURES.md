@@ -172,9 +172,73 @@ src/
 - Location sharing granularity
 - Opt-out from all social features
 
+## Destination Badges System
+
+### Overview
+Destinations can earn special badges/awards based on various criteria to help users make better decisions.
+
+### Badge Types
+
+#### 1. 🚗 Worth the Drive
+- **Criteria**: Best weather improvement per kilometer/hour of driving
+- **Calculation**: `(destination_temp - current_temp) / distance_km`
+- **Purpose**: Highlight destinations where the weather gain justifies the distance
+- **Display**: Gold badge on map marker + detail screen
+
+#### 2. ☀️ Warm & Dry
+- **Criteria**: Maximum warmth with acceptable conditions
+- **Requirements**:
+  - Highest temperature in search radius
+  - Weather condition not rainy
+  - Wind speed below threshold (e.g., < 25 km/h)
+  - Suitable for day/night (based on time)
+- **Purpose**: Find the warmest spot that's actually pleasant
+- **Display**: Orange-red badge
+
+#### 3. 🏕️ Best Stop
+- **Criteria**: Combined score of weather + surroundings + amenities
+- **Requirements**:
+  - Good weather score (temp + condition)
+  - Nearby amenities (supermarkets, gas stations, parking)
+  - POIs (Points of Interest) for campers
+  - Requires: Google Places API integration
+- **Purpose**: Perfect stop for campers/travelers
+- **Display**: Green badge
+
+### Implementation
+
+**Domain Model**: `src/domain/destinationBadge.js`
+- Badge types enum
+- Badge metadata (icons, colors, priority)
+- `calculateBadges()` function (TODO: implement when data available)
+
+**Translations**: Added to `de.json`, `en.json`, `fr.json`
+- Badge names
+- Badge descriptions
+
+**UI Integration** (Future):
+- Badge overlay on map markers
+- Badge section in detail screen
+- Filter destinations by badge type
+
+### Data Requirements
+- Current location
+- Destination weather data ✅
+- Distance calculations ✅
+- Wind speed data (available in OpenWeatherMap) ✅
+- Nearby amenities (requires Google Places API) ❌
+- Driving time (requires Google Maps Directions API) ❌
+
+### Cost Implications (for Best Stop badge)
+- **Google Places API**: $0.017 per request
+- **Estimate**: 50 destinations × 1 request = $0.85 per search
+- **Optimization**: Cache POI data, limit to top 10 destinations
+- **Realistic cost**: ~$5-10/month with moderate usage
+
 ## Notes
 - Current architecture is modular and ready for extension
 - No breaking changes needed to existing code
 - Social features can be added incrementally
 - All existing features remain functional independently
+- Badge system prepared but UI integration pending
 

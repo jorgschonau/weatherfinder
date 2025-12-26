@@ -82,6 +82,14 @@
     "viewDetails": "Details ansehen",
     "removeFromFavourites": "Aus Favoriten entfernen",
     "savedOn": "Gespeichert am {{date}}"
+  },
+  "badges": {
+    "worthTheDrive": "Lohnt die Fahrt",
+    "worthTheDriveDescription": "Bester Wetter-Gewinn pro km",
+    "warmAndDry": "Warm & Trocken",
+    "warmAndDryDescription": "Maximale Wärme bei gutem Wetter",
+    "bestStop": "Bester Stopp",
+    "bestStopDescription": "Top-Bewertung: Wetter + Umgebung + Versorgung"
   }
 }
 

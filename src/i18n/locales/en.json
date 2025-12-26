@@ -82,6 +82,14 @@
     "viewDetails": "View Details",
     "removeFromFavourites": "Remove from favourites",
     "savedOn": "Saved on {{date}}"
+  },
+  "badges": {
+    "worthTheDrive": "Worth the Drive",
+    "worthTheDriveDescription": "Best weather gain per km",
+    "warmAndDry": "Warm & Dry",
+    "warmAndDryDescription": "Max warmth with good conditions",
+    "bestStop": "Best Stop",
+    "bestStopDescription": "Top score: Weather + Area + Amenities"
   }
 }
 

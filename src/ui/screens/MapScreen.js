@@ -188,11 +188,12 @@ const MapScreen = ({ navigation }) => {
           >
             <View style={[
               styles.markerContainer, 
-              { backgroundColor: getWeatherColor(dest.condition) }
+              { backgroundColor: getWeatherColor(dest.condition) },
+              dest.isCurrentLocation && styles.currentLocationMarker
             ]}>
               <Text style={styles.markerWeatherIcon}>{getWeatherIcon(dest.condition)}</Text>
               <Text style={styles.markerTemp}>{dest.temperature}°</Text>
-              <View style={styles.stabilityBadge}>
+              <View style={[styles.stabilityBadge, dest.isCurrentLocation && styles.currentLocationBadge]}>
                 <Text style={styles.stabilityText}>{getStabilitySymbol(dest.stability)}</Text>
               </View>
             </View>
@@ -387,6 +388,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  currentLocationMarker: {
+    borderColor: '#2196F3',
+    borderWidth: 4,
+  },
   markerWeatherIcon: {
     fontSize: 28,
   },
@@ -415,6 +420,9 @@ const styles = StyleSheet.create({
     minWidth: 32,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  currentLocationBadge: {
+    backgroundColor: '#2196F3',
   },
   stabilityText: {
     fontSize: 18,
