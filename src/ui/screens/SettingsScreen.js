@@ -20,6 +20,7 @@ const THEMES = [
   { id: 'light', name: 'Hell', icon: '☀️' },
   { id: 'dark', name: 'Dunkel', icon: '🌙' },
   { id: 'blue', name: 'Blau', icon: '🌊' },
+  { id: 'amber', name: 'Gold', icon: '✨' },
 ];
 
 const SettingsScreen = ({ navigation }) => {

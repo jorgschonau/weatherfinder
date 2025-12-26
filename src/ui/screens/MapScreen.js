@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 import { BadgeMetadata } from '../../domain/destinationBadge';
+import { playTickSound } from '../../utils/soundUtils';
 import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
 import OnboardingOverlay from '../components/OnboardingOverlay';
@@ -100,11 +101,13 @@ const MapScreen = ({ navigation }) => {
   const handleRadiusIncrease = () => {
     const newRadius = radius + 10;
     setRadius(Math.min(newRadius, 5000)); // Max 5000 km
+    playTickSound(); // Play tick sound on interaction
   };
 
   const handleRadiusDecrease = () => {
     const newRadius = radius - 10;
     setRadius(Math.max(newRadius, 10)); // Min 10 km
+    playTickSound(); // Play tick sound on interaction
   };
 
   const handleCloseOnboarding = async () => {

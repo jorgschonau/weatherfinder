@@ -1,0 +1,51 @@
+import * as Haptics from 'expo-haptics';
+
+/**
+ * Play haptic feedback ONLY - ultra-fast, no sound, no problems!
+ * Sound caused timeouts and UI lag, so we're using ONLY haptics now.
+ */
+export const playTickSound = () => {
+  try {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  } catch (e) {
+    // Ignore
+  }
+};
+
+/**
+ * Play a medium haptic feedback for more important interactions
+ */
+export const playMediumHaptic = async () => {
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  } catch (error) {
+    console.debug('Haptic feedback not available:', error.message);
+  }
+};
+
+/**
+ * Play a success haptic feedback
+ */
+export const playSuccessHaptic = async () => {
+  try {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  } catch (error) {
+    console.debug('Haptic feedback not available:', error.message);
+  }
+};
+
+/**
+ * Cleanup sound resources
+ */
+export const cleanupSound = async () => {
+  try {
+    if (tickSound) {
+      await tickSound.unloadAsync();
+      tickSound = null;
+      isInitialized = false;
+    }
+  } catch (error) {
+    console.debug('Could not cleanup sound:', error.message);
+  }
+};
+

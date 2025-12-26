@@ -64,6 +64,21 @@ export const themes = {
     success: '#1976D2',
     shadow: '#0D47A1',
   },
+  amber: {
+    id: 'amber',
+    primary: '#FF8F00',
+    primaryDark: '#E65100',
+    primaryLight: '#FFB300',
+    background: '#FFF8E1',
+    surface: '#FFFBF0',
+    text: '#E65100',
+    textSecondary: '#F57C00',
+    textTertiary: '#FF8F00',
+    border: '#FF8F00',
+    error: '#D32F2F',
+    success: '#FF8F00',
+    shadow: '#E65100',
+  },
 };
 
 export const ThemeProvider = ({ children }) => {
