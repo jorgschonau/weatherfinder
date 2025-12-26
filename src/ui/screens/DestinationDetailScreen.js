@@ -199,6 +199,11 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             {destination.badges.map((badge, index) => {
               const metadata = BadgeMetadata[badge];
               const worthData = destination._worthTheDriveData;
+              const warmDryData = destination._warmAndDryData;
+              
+              // Determine which badge type and show appropriate data
+              const isWorthTheDrive = badge === 'WORTH_THE_DRIVE';
+              const isWarmAndDry = badge === 'WARM_AND_DRY';
               
               return (
                 <View key={index} style={[styles.badgeCard, { backgroundColor: theme.background }]}>
@@ -207,12 +212,16 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                   </View>
                   <View style={styles.badgeContent}>
                     <Text style={[styles.badgeName, { color: theme.text }]}>
-                      {t(`badges.worthTheDrive`)}
+                      {isWorthTheDrive && t(`badges.worthTheDrive`)}
+                      {isWarmAndDry && t(`badges.warmAndDry`)}
                     </Text>
                     <Text style={[styles.badgeDescription, { color: theme.textSecondary }]}>
-                      {t(`badges.worthTheDriveDescription`)}
+                      {isWorthTheDrive && t(`badges.worthTheDriveDescription`)}
+                      {isWarmAndDry && t(`badges.warmAndDryDescription`)}
                     </Text>
-                    {worthData && (
+                    
+                    {/* Worth the Drive stats */}
+                    {isWorthTheDrive && worthData && (
                       <View style={styles.badgeStats}>
                         <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
                           🌡️ Temperatur: {worthData.tempOrigin}°C → {worthData.tempDest}°C (+{worthData.tempDelta}°C)
@@ -225,6 +234,21 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                         </Text>
                         <Text style={[styles.badgeStat, { color: metadata.color }]}>
                           ⭐ Value Score: {worthData.value} pts/h
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {/* Warm & Dry stats */}
+                    {isWarmAndDry && warmDryData && (
+                      <View style={styles.badgeStats}>
+                        <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          🌡️ Temperatur: {warmDryData.temp}°C (Rang #{warmDryData.tempRank})
+                        </Text>
+                        <Text style={[styles.badgeStat, { color: theme.primary }]}>
+                          ☀️ Bedingungen: {warmDryData.condition}
+                        </Text>
+                        <Text style={[styles.badgeStat, { color: theme.primary }]}>
+                          💨 Wind: {warmDryData.windSpeed} km/h
                         </Text>
                       </View>
                     )}

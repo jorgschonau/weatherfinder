@@ -270,22 +270,31 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     dest.badges = calculateBadges(dest, originLocation, dest.distance, destinations);
   });
   
-  // Limit "Worth the Drive" badges to top 3 destinations by rankScore
-  const worthTheDriveCandidates = destinations
-    .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE'))
-    .sort((a, b) => (b._worthTheDriveData?.rankScore || 0) - (a._worthTheDriveData?.rankScore || 0));
-  
+  // Limit "Worth the Drive" badges to top 3 WARMEST destinations (among those that qualify)
   const MAX_WORTH_THE_DRIVE_BADGES = 3;
   
-  // Remove badge from destinations beyond top 3
+  const worthTheDriveCandidates = destinations
+    .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE'))
+    .sort((a, b) => (b._worthTheDriveData?.tempDest || 0) - (a._worthTheDriveData?.tempDest || 0)); // Sort by temperature!
+  
   if (worthTheDriveCandidates.length > MAX_WORTH_THE_DRIVE_BADGES) {
     worthTheDriveCandidates.slice(MAX_WORTH_THE_DRIVE_BADGES).forEach(dest => {
       dest.badges = dest.badges.filter(b => b !== 'WORTH_THE_DRIVE');
     });
   }
   
-  const finalBadgeCount = destinations.filter(d => d.badges && d.badges.length > 0).length;
-  console.log(`🏆 Awarded badges to ${finalBadgeCount}/${destinations.length - 1} destinations (max ${MAX_WORTH_THE_DRIVE_BADGES} per type)`);
+  // "Warm & Dry" badges: NO LIMIT - all qualifying destinations get it
+  // (no filtering needed, they all keep their badge)
+  
+  const destWithBadges = destinations.filter(d => d.badges && d.badges.length > 0);
+  const totalBadges = destWithBadges.reduce((sum, d) => sum + d.badges.length, 0);
+  const worthCount = destinations.filter(d => d.badges?.includes('WORTH_THE_DRIVE')).length;
+  const warmDryCount = destinations.filter(d => d.badges?.includes('WARM_AND_DRY')).length;
+  
+  console.log(
+    `🏆 Awarded ${totalBadges} badges to ${destWithBadges.length} destinations ` +
+    `(🚗 Worth: ${worthCount}/${worthTheDriveCandidates.length} limited, ☀️ Warm&Dry: ${warmDryCount} unlimited)`
+  );
 };
 
 const generateMockDestinations = (lat, lon, radiusKm = 400, count = null, desiredCondition = null) => {

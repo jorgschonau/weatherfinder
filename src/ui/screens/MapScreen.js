@@ -198,12 +198,22 @@ const MapScreen = ({ navigation }) => {
                 <Text style={styles.stabilityText}>{getStabilitySymbol(dest.stability)}</Text>
               </View>
               
-              {/* Badge overlay (top-right corner) */}
+              {/* Badge overlays (stacked vertically on right side) */}
               {dest.badges && dest.badges.length > 0 && (
-                <View style={styles.badgeOverlay}>
-                  <Text style={styles.badgeIcon}>
-                    {BadgeMetadata[dest.badges[0]].icon}
-                  </Text>
+                <View style={styles.badgeOverlayContainer}>
+                  {dest.badges.map((badge, badgeIndex) => (
+                    <View 
+                      key={badgeIndex} 
+                      style={[
+                        styles.badgeOverlay,
+                        { backgroundColor: BadgeMetadata[badge].color }
+                      ]}
+                    >
+                      <Text style={styles.badgeIcon}>
+                        {BadgeMetadata[badge].icon}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               )}
             </View>
@@ -440,11 +450,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     lineHeight: 18,
   },
-  badgeOverlay: {
+  badgeOverlayContainer: {
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: '#FFD700',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  badgeOverlay: {
     borderRadius: 16,
     width: 32,
     height: 32,

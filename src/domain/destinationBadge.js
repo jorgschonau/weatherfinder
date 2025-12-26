@@ -166,6 +166,52 @@ export function calculateWorthTheDrive(destination, origin, distanceKm) {
  * @param {Array} allDestinations - All destinations for comparison (for future badges)
  * @returns {Array<string>} - Array of badge types this destination earned
  */
+/**
+ * Calculate "Warm & Dry" eligibility
+ * Awards badge to warmest destinations with good conditions (no rain, low wind)
+ * 
+ * @param {Object} destination - Destination to evaluate
+ * @param {Array} allDestinations - All destinations for comparison
+ * @returns {Object} - { isWarm, isDry, isCalm, shouldAward, tempRank }
+ */
+export function calculateWarmAndDry(destination, allDestinations) {
+  const temp = destination.temperature ?? 0;
+  const condition = destination.condition ?? 'unknown';
+  const windSpeed = destination.windSpeed ?? 0;
+  
+  // Criteria
+  const MIN_TEMP = 12; // Must be at least comfortably warm
+  const MAX_WIND = 20; // Max wind speed in km/h (light breeze)
+  const BAD_CONDITIONS = ['rainy', 'snowy']; // Conditions that disqualify
+  
+  // Check conditions
+  const isWarm = temp >= MIN_TEMP;
+  const isDry = !BAD_CONDITIONS.includes(condition);
+  const isCalm = windSpeed <= MAX_WIND;
+  
+  // Rank by temperature among all destinations (for display purposes)
+  const sortedByTemp = [...allDestinations]
+    .filter(d => !d.isCurrentLocation)
+    .sort((a, b) => (b.temperature ?? 0) - (a.temperature ?? 0));
+  const tempRank = sortedByTemp.findIndex(d => 
+    d.lat === destination.lat && d.lon === destination.lon
+  ) + 1;
+  
+  // Award to ALL destinations that meet the criteria (no rank limit)
+  const shouldAward = isWarm && isDry && isCalm;
+  
+  return {
+    isWarm,
+    isDry,
+    isCalm,
+    shouldAward,
+    tempRank,
+    temp,
+    windSpeed,
+    condition,
+  };
+}
+
 export function calculateBadges(destination, userLocation, distanceKm, allDestinations = []) {
   const badges = [];
 
@@ -174,8 +220,6 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
   destination._worthTheDriveData = worthResult; // Store for UI display (even if no badge awarded)
   
   if (worthResult.shouldAward) {
-    // Additional check: Only award to TOP destinations (limit to best 3-5 per search)
-    // This will be enforced by limiting badges globally after all are calculated
     badges.push(DestinationBadge.WORTH_THE_DRIVE);
     console.log(
       `🚗 ${destination.name}: Worth it! ` +
@@ -186,8 +230,19 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
     );
   }
 
-  // 2. Warm & Dry (TODO: Implement later)
-  // - Check: temp high, condition not rainy, wind low
+  // 2. Warm & Dry
+  const warmDryResult = calculateWarmAndDry(destination, allDestinations);
+  destination._warmAndDryData = warmDryResult; // Store for UI display
+  
+  if (warmDryResult.shouldAward) {
+    badges.push(DestinationBadge.WARM_AND_DRY);
+    console.log(
+      `☀️ ${destination.name}: Warm & Dry! ` +
+      `Temp: ${warmDryResult.temp}°C (Rank: #${warmDryResult.tempRank}), ` +
+      `Condition: ${warmDryResult.condition}, ` +
+      `Wind: ${warmDryResult.windSpeed} km/h`
+    );
+  }
 
   // 3. Best Stop (TODO: Implement later)
   // - Requires: POI/amenities data from Google Places API
