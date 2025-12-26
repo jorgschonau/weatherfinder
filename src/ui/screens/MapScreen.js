@@ -13,6 +13,7 @@ import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
+import { BadgeMetadata } from '../../domain/destinationBadge';
 import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
 import OnboardingOverlay from '../components/OnboardingOverlay';
@@ -196,6 +197,15 @@ const MapScreen = ({ navigation }) => {
               <View style={[styles.stabilityBadge, dest.isCurrentLocation && styles.currentLocationBadge]}>
                 <Text style={styles.stabilityText}>{getStabilitySymbol(dest.stability)}</Text>
               </View>
+              
+              {/* Badge overlay (top-right corner) */}
+              {dest.badges && dest.badges.length > 0 && (
+                <View style={styles.badgeOverlay}>
+                  <Text style={styles.badgeIcon}>
+                    {BadgeMetadata[dest.badges[0]].icon}
+                  </Text>
+                </View>
+              )}
             </View>
           </Marker>
         ))}
@@ -429,6 +439,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     lineHeight: 18,
+  },
+  badgeOverlay: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FFD700',
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  badgeIcon: {
+    fontSize: 18,
   },
   loadingOverlay: {
     position: 'absolute',

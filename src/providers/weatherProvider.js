@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { calculateBadges } from '../domain/destinationBadge';
 
 const API_BASE_URL = 'https://api.openweathermap.org/data/2.5';
 const SEARCH_URL = `${API_BASE_URL}/find`;
@@ -245,6 +246,38 @@ const generateMockWeatherData = (lat, lon, index, desiredCondition = null) => {
   };
 };
 
+/**
+ * Apply badge calculations to all destinations
+ * Mutates destination objects by adding 'badges' array
+ */
+const applyBadgesToDestinations = (destinations, originLocation, originLat, originLon) => {
+  if (!destinations || !originLocation) return;
+  
+  let badgeCount = 0;
+  
+  destinations.forEach(dest => {
+    // Skip current location (it shouldn't get badges)
+    if (dest.isCurrentLocation) {
+      dest.badges = [];
+      return;
+    }
+    
+    // Calculate distance if not already present
+    if (!dest.distance) {
+      dest.distance = getDistanceKm(originLat, originLon, dest.lat, dest.lon);
+    }
+    
+    // Calculate and assign badges
+    dest.badges = calculateBadges(dest, originLocation, dest.distance, destinations);
+    
+    if (dest.badges.length > 0) {
+      badgeCount++;
+    }
+  });
+  
+  console.log(`🏆 Awarded badges to ${badgeCount}/${destinations.length - 1} destinations`);
+};
+
 const generateMockDestinations = (lat, lon, radiusKm = 400, count = null, desiredCondition = null) => {
   const destinations = [];
   const numDestinations = count ?? Math.max(5, Math.min(20, Math.floor(radiusKm / 50)));
@@ -436,7 +469,12 @@ export const fetchWeatherDestinationsForRadius = async (
     if (hasFilter) {
       const mockCount = Math.max(20, Math.floor(radiusKm / 20)); // Always 20+ mocks when filtering
       const mockDestinations = generateMockDestinations(userLat, userLon, radiusKm, mockCount, desiredCondition);
-      return [...allDestinations, ...mockDestinations];
+      const finalDestinations = [...allDestinations, ...mockDestinations];
+      
+      // Calculate badges before returning
+      applyBadgesToDestinations(finalDestinations, currentLocationWeather, userLat, userLon);
+      
+      return finalDestinations;
     }
     
     // No filter: add mocks only if needed
@@ -445,13 +483,21 @@ export const fetchWeatherDestinationsForRadius = async (
     
     if (mockCount > 0) {
       const mockDestinations = generateMockDestinations(userLat, userLon, radiusKm, mockCount);
-      return [...allDestinations, ...mockDestinations];
+      allDestinations = [...allDestinations, ...mockDestinations];
     }
+    
+    // Calculate badges before returning
+    applyBadgesToDestinations(allDestinations, currentLocationWeather, userLat, userLon);
     
     return allDestinations;
   } catch (error) {
     console.warn('Failed to load destinations from OpenWeatherMap', error);
-    return generateMockDestinations(userLat, userLon, radiusKm);
+    const mockDests = generateMockDestinations(userLat, userLon, radiusKm);
+    // Even for mock data, try to calculate badges if we have current location weather
+    if (currentLocationWeather) {
+      applyBadgesToDestinations(mockDests, currentLocationWeather, userLat, userLon);
+    }
+    return mockDests;
   }
 };
 

@@ -14,6 +14,7 @@ import { getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases'
 import { openInMaps, NavigationProvider } from '../../usecases/navigationUsecases';
 import { fetchDetailedForecast } from '../../providers/weatherProvider';
 import { toggleFavourite, isDestinationFavourite } from '../../usecases/favouritesUsecases';
+import { BadgeMetadata } from '../../domain/destinationBadge';
 
 const DestinationDetailScreen = ({ route, navigation }) => {
   const { t } = useTranslation();
@@ -186,6 +187,50 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             </View>
           </View>
         </View>
+
+        {/* Badge Section */}
+        {destination.badges && destination.badges.length > 0 && (
+          <View style={[styles.badgeSection, {
+            backgroundColor: theme.surface,
+            shadowColor: theme.shadow,
+            borderColor: theme.border
+          }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>🏆 Auszeichnungen</Text>
+            {destination.badges.map((badge, index) => {
+              const metadata = BadgeMetadata[badge];
+              const worthData = destination._worthTheDriveData;
+              
+              return (
+                <View key={index} style={[styles.badgeCard, { backgroundColor: theme.background }]}>
+                  <View style={[styles.badgeIconContainer, { backgroundColor: metadata.color }]}>
+                    <Text style={styles.badgeCardIcon}>{metadata.icon}</Text>
+                  </View>
+                  <View style={styles.badgeContent}>
+                    <Text style={[styles.badgeName, { color: theme.text }]}>
+                      {t(`badges.worthTheDrive`)}
+                    </Text>
+                    <Text style={[styles.badgeDescription, { color: theme.textSecondary }]}>
+                      {t(`badges.worthTheDriveDescription`)}
+                    </Text>
+                    {worthData && (
+                      <View style={styles.badgeStats}>
+                        <Text style={[styles.badgeStat, { color: theme.primary }]}>
+                          💨 ETA: {worthData.eta}h ({Math.round(destination.distance)}km)
+                        </Text>
+                        <Text style={[styles.badgeStat, { color: theme.primary }]}>
+                          📈 Wetter-Gewinn: +{worthData.delta} Punkte
+                        </Text>
+                        <Text style={[styles.badgeStat, { color: metadata.color }]}>
+                          ⭐ Value Score: {worthData.value} pts/h
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         <View style={[styles.forecastSection, {
           backgroundColor: theme.surface,
@@ -388,6 +433,53 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 2.22,
     elevation: 3,
+  },
+  badgeSection: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  badgeCard: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  badgeIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  badgeCardIcon: {
+    fontSize: 32,
+  },
+  badgeContent: {
+    flex: 1,
+  },
+  badgeName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  badgeDescription: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  badgeStats: {
+    marginTop: 4,
+  },
+  badgeStat: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 20,
