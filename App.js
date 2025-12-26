@@ -37,12 +37,18 @@ function AppContent() {
       <Stack.Screen 
         name="DestinationDetail" 
         component={DestinationDetailScreen}
-        options={{ title: t('app.destinationDetails') }}
+        options={{ 
+          title: t('app.destinationDetails'),
+          headerBackTitle: 'Zurück'
+        }}
       />
       <Stack.Screen 
         name="Favourites" 
         component={FavouritesScreen}
-        options={{ title: t('app.favourites') }}
+        options={{ 
+          title: t('app.favourites'),
+          headerBackTitle: 'Zurück'
+        }}
       />
       <Stack.Screen 
         name="Community" 
@@ -52,7 +58,10 @@ function AppContent() {
       <Stack.Screen 
         name="Settings" 
         component={SettingsScreen}
-        options={{ title: t('app.settings') }}
+        options={{ 
+          title: t('app.settings'),
+          headerBackTitle: 'Zurück'
+        }}
       />
     </Stack.Navigator>
   );

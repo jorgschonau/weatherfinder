@@ -141,12 +141,6 @@ const DestinationDetailScreen = ({ route, navigation }) => {
         >
           <Text style={styles.retryButtonText}>{t('destination.retry')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.backButtonError}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={[styles.backButtonTextError, { color: theme.primary }]}>{t('destination.backToMap')}</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -344,13 +338,13 @@ const DestinationDetailScreen = ({ route, navigation }) => {
 
         <View style={styles.actionsContainer}>
           <TouchableOpacity
-            style={[styles.backButton, {
-              backgroundColor: theme.surface,
-              borderColor: theme.primary
+            style={[styles.driveButton, {
+              backgroundColor: theme.primary,
+              shadowColor: theme.primary
             }]}
-            onPress={() => navigation.goBack()}
+            onPress={handleDriveThere}
           >
-            <Text style={[styles.backButtonText, { color: theme.primary }]}>{t('destination.backToMap')}</Text>
+            <Text style={styles.driveButtonText}>{t('destination.driveThere')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -368,16 +362,6 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                 {isFavourite ? '⭐' : '☆'}
               </Text>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.driveButton, {
-              backgroundColor: theme.primary,
-              shadowColor: theme.primary
-            }]}
-            onPress={handleDriveThere}
-          >
-            <Text style={styles.driveButtonText}>{t('destination.driveThere')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -425,16 +409,6 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  backButtonError: {
-    paddingVertical: 18,
-    paddingHorizontal: 40,
-    minHeight: 64,
-    justifyContent: 'center',
-  },
-  backButtonTextError: {
     fontSize: 20,
     fontWeight: '700',
   },
@@ -588,19 +562,6 @@ const styles = StyleSheet.create({
   actionsContainer: {
     gap: 12,
     marginBottom: 30,
-  },
-  backButton: {
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    minHeight: 68,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-  },
-  backButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
   },
   favouriteButton: {
     paddingVertical: 20,

@@ -19,6 +19,7 @@ import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 import AnimatedBadge from '../components/AnimatedBadge';
+import { SkeletonMapMarker } from '../components/SkeletonLoader';
 
 const MapScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ const MapScreen = ({ navigation }) => {
   const [radius, setRadius] = useState(400); // Default 400km
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingDestinations, setLoadingDestinations] = useState(false);
   const [mapType, setMapType] = useState('standard'); // standard, satellite, hybrid, terrain, mutedStandard
   const [controlsExpanded, setControlsExpanded] = useState(true); // Controls einklappbar
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -79,7 +81,7 @@ const MapScreen = ({ navigation }) => {
   const loadDestinations = async () => {
     if (!location) return;
     
-    setLoading(true);
+    setLoadingDestinations(true);
     try {
       const weatherData = await getWeatherForRadius(
         location.latitude,
@@ -92,7 +94,7 @@ const MapScreen = ({ navigation }) => {
       Alert.alert(t('map.error'), t('map.failedToLoadWeather'));
       console.error(error);
     } finally {
-      setLoading(false);
+      setLoadingDestinations(false);
     }
   };
 
@@ -221,6 +223,18 @@ const MapScreen = ({ navigation }) => {
           </Marker>
         ))}
       </MapView>
+
+      {/* Loading Overlay for destinations */}
+      {loadingDestinations && (
+        <View style={styles.loadingOverlay}>
+          <View style={[styles.loadingBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingOverlayText, { color: theme.text }]}>
+              {t('map.loadingLocation')}...
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Favourites Button */}
       <TouchableOpacity
@@ -481,7 +495,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  loadingBox: {
+    padding: 30,
+    borderRadius: 20,
+    borderWidth: 2,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  loadingOverlayText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
   },
   radiusControlsWrapper: {
     position: 'absolute',
