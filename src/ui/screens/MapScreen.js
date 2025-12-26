@@ -33,6 +33,7 @@ const MapScreen = ({ navigation }) => {
   const [controlsExpanded, setControlsExpanded] = useState(true); // Controls einklappbar
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showMockData, setShowMockData] = useState(true); // Toggle for mock data (temp for testing)
+  const [showOnlyBadges, setShowOnlyBadges] = useState(false); // Toggle to show only destinations with badges
 
   useEffect(() => {
     (async () => {
@@ -185,6 +186,7 @@ const MapScreen = ({ navigation }) => {
         )}
         {destinations
           .filter(dest => showMockData || !dest.isMockData) // Filter mock data based on toggle
+          .filter(dest => !showOnlyBadges || (dest.badges && dest.badges.length > 0)) // Filter by badges if toggle active
           .map((dest, index) => (
           <Marker
             key={index}
@@ -242,6 +244,21 @@ const MapScreen = ({ navigation }) => {
         onPress={() => setShowMockData(!showMockData)}
       >
         <Text style={[styles.mockToggleIcon, { color: showMockData ? '#fff' : theme.text }]}>🎲</Text>
+      </TouchableOpacity>
+
+      {/* Badge Filter Toggle Button */}
+      <TouchableOpacity
+        style={[styles.badgeToggleButton, { 
+          backgroundColor: showOnlyBadges ? '#FFD700' : theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}
+        onPress={() => {
+          setShowOnlyBadges(!showOnlyBadges);
+          playTickSound();
+        }}
+      >
+        <Text style={[styles.badgeToggleIcon, { color: showOnlyBadges ? '#000' : theme.text }]}>🏆</Text>
       </TouchableOpacity>
 
       {/* Settings Button */}
@@ -597,6 +614,28 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   mockToggleIcon: {
+    fontSize: 36,
+    textAlign: 'center',
+    lineHeight: 36,
+    includeFontPadding: false,
+    marginTop: 4,
+  },
+  badgeToggleButton: {
+    position: 'absolute',
+    top: 232, // Below mock toggle (158 + 64 + 10)
+    right: 10,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  badgeToggleIcon: {
     fontSize: 36,
     textAlign: 'center',
     lineHeight: 36,
