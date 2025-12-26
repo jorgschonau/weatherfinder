@@ -18,6 +18,7 @@ import { playTickSound } from '../../utils/soundUtils';
 import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
 import OnboardingOverlay from '../components/OnboardingOverlay';
+import AnimatedBadge from '../components/AnimatedBadge';
 
 const MapScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -201,21 +202,16 @@ const MapScreen = ({ navigation }) => {
                 <Text style={styles.stabilityText}>{getStabilitySymbol(dest.stability)}</Text>
               </View>
               
-              {/* Badge overlays (stacked vertically on right side) */}
+              {/* Badge overlays (stacked vertically on right side) with animations */}
               {dest.badges && dest.badges.length > 0 && (
                 <View style={styles.badgeOverlayContainer}>
                   {dest.badges.map((badge, badgeIndex) => (
-                    <View 
-                      key={badgeIndex} 
-                      style={[
-                        styles.badgeOverlay,
-                        { backgroundColor: BadgeMetadata[badge].color }
-                      ]}
-                    >
-                      <Text style={styles.badgeIcon}>
-                        {BadgeMetadata[badge].icon}
-                      </Text>
-                    </View>
+                    <AnimatedBadge
+                      key={badgeIndex}
+                      icon={BadgeMetadata[badge].icon}
+                      color={BadgeMetadata[badge].color}
+                      delay={badgeIndex * 100} // Stagger animation for multiple badges
+                    />
                   ))}
                 </View>
               )}
@@ -459,23 +455,6 @@ const styles = StyleSheet.create({
     right: -8,
     flexDirection: 'column',
     gap: 4,
-  },
-  badgeOverlay: {
-    borderRadius: 16,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  badgeIcon: {
-    fontSize: 18,
   },
   loadingOverlay: {
     position: 'absolute',

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -205,11 +206,59 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               const isWorthTheDrive = badge === 'WORTH_THE_DRIVE';
               const isWarmAndDry = badge === 'WARM_AND_DRY';
               
-              return (
-                <View key={index} style={[styles.badgeCard, { backgroundColor: theme.background }]}>
-                  <View style={[styles.badgeIconContainer, { backgroundColor: metadata.color }]}>
-                    <Text style={styles.badgeCardIcon}>{metadata.icon}</Text>
-                  </View>
+              // Animated Badge Card
+              const AnimatedBadgeCard = () => {
+                const fadeAnim = React.useRef(new Animated.Value(0)).current;
+                const slideAnim = React.useRef(new Animated.Value(50)).current; // Start further right
+                const scaleAnim = React.useRef(new Animated.Value(0.8)).current; // Start smaller
+                
+                React.useEffect(() => {
+                  // Reset animations
+                  fadeAnim.setValue(0);
+                  slideAnim.setValue(50);
+                  scaleAnim.setValue(0.8);
+                  
+                  Animated.parallel([
+                    Animated.timing(fadeAnim, {
+                      toValue: 1,
+                      duration: 600, // Longer
+                      delay: index * 200, // More stagger
+                      useNativeDriver: true,
+                    }),
+                    Animated.spring(slideAnim, {
+                      toValue: 0,
+                      tension: 40,
+                      friction: 6,
+                      delay: index * 200,
+                      useNativeDriver: true,
+                    }),
+                    Animated.spring(scaleAnim, {
+                      toValue: 1,
+                      tension: 40,
+                      friction: 6,
+                      delay: index * 200,
+                      useNativeDriver: true,
+                    }),
+                  ]).start();
+                }, [destination, badge]); // Re-trigger on change!
+                
+                return (
+                  <Animated.View 
+                    style={[
+                      styles.badgeCard, 
+                      { backgroundColor: theme.background },
+                      {
+                        opacity: fadeAnim,
+                        transform: [
+                          { translateX: slideAnim },
+                          { scale: scaleAnim }
+                        ],
+                      }
+                    ]}
+                  >
+                    <View style={[styles.badgeIconContainer, { backgroundColor: metadata.color }]}>
+                      <Text style={styles.badgeCardIcon}>{metadata.icon}</Text>
+                    </View>
                   <View style={styles.badgeContent}>
                     <Text style={[styles.badgeName, { color: theme.text }]}>
                       {isWorthTheDrive && t(`badges.worthTheDrive`)}
@@ -253,8 +302,11 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       </View>
                     )}
                   </View>
-                </View>
-              );
+                </Animated.View>
+                );
+              };
+              
+              return <AnimatedBadgeCard key={index} />;
             })}
           </View>
         )}
