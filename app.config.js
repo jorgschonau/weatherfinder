@@ -7,18 +7,22 @@ export default {
     version: '1.0.0',
     orientation: 'portrait',
     userInterfaceStyle: 'light',
+    icon: './assets/icon.png',
     splash: {
+      image: './assets/splash.png',
       resizeMode: 'contain',
-      backgroundColor: '#2E7D32',
+      backgroundColor: '#FF8F00', // SunNomad orange/gold
     },
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.sunnomad.app',
+      icon: './assets/icon.png',
     },
     android: {
       adaptiveIcon: {
-        backgroundColor: '#2E7D32',
+        foregroundImage: './assets/adaptive-icon.png',
+        backgroundColor: '#FF8F00', // SunNomad orange/gold
       },
       package: 'com.sunnomad.app',
       permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'],
