@@ -1,6 +1,6 @@
-# Weather Finder - React Native App
+# SunNomad 🌞🏜️
 
-A cross-platform mobile app built with React Native and Expo that helps you find destinations with your desired weather conditions within a specified travel radius.
+A cross-platform mobile app built with React Native and Expo that helps nomads and travelers find the best sunny destinations with optimal weather conditions within their travel radius.
 
 ## Features
 

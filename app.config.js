@@ -2,8 +2,8 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: 'WeatherFinder',
-    slug: 'weather-finder',
+    name: 'SunNomad',
+    slug: 'sunnomad',
     version: '1.0.0',
     orientation: 'portrait',
     userInterfaceStyle: 'light',
@@ -14,13 +14,13 @@ export default {
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.weatherfinder.app',
+      bundleIdentifier: 'com.sunnomad.app',
     },
     android: {
       adaptiveIcon: {
         backgroundColor: '#2E7D32',
       },
-      package: 'com.weatherfinder.app',
+      package: 'com.sunnomad.app',
       permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'],
     },
     web: {},
@@ -29,7 +29,7 @@ export default {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            'Allow Weather Finder to use your location to find nearby destinations.',
+            'Allow SunNomad to use your location to find sunny destinations.',
         },
       ],
       'expo-localization',
