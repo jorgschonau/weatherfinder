@@ -249,11 +249,10 @@ const generateMockWeatherData = (lat, lon, index, desiredCondition = null) => {
 /**
  * Apply badge calculations to all destinations
  * Mutates destination objects by adding 'badges' array
+ * Limits "Worth the Drive" badges to top 3 destinations only
  */
 const applyBadgesToDestinations = (destinations, originLocation, originLat, originLon) => {
   if (!destinations || !originLocation) return;
-  
-  let badgeCount = 0;
   
   destinations.forEach(dest => {
     // Skip current location (it shouldn't get badges)
@@ -269,13 +268,24 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     
     // Calculate and assign badges
     dest.badges = calculateBadges(dest, originLocation, dest.distance, destinations);
-    
-    if (dest.badges.length > 0) {
-      badgeCount++;
-    }
   });
   
-  console.log(`🏆 Awarded badges to ${badgeCount}/${destinations.length - 1} destinations`);
+  // Limit "Worth the Drive" badges to top 3 destinations by rankScore
+  const worthTheDriveCandidates = destinations
+    .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE'))
+    .sort((a, b) => (b._worthTheDriveData?.rankScore || 0) - (a._worthTheDriveData?.rankScore || 0));
+  
+  const MAX_WORTH_THE_DRIVE_BADGES = 3;
+  
+  // Remove badge from destinations beyond top 3
+  if (worthTheDriveCandidates.length > MAX_WORTH_THE_DRIVE_BADGES) {
+    worthTheDriveCandidates.slice(MAX_WORTH_THE_DRIVE_BADGES).forEach(dest => {
+      dest.badges = dest.badges.filter(b => b !== 'WORTH_THE_DRIVE');
+    });
+  }
+  
+  const finalBadgeCount = destinations.filter(d => d.badges && d.badges.length > 0).length;
+  console.log(`🏆 Awarded badges to ${finalBadgeCount}/${destinations.length - 1} destinations (max ${MAX_WORTH_THE_DRIVE_BADGES} per type)`);
 };
 
 const generateMockDestinations = (lat, lon, radiusKm = 400, count = null, desiredCondition = null) => {

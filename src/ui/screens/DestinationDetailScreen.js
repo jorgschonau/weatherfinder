@@ -214,6 +214,9 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                     </Text>
                     {worthData && (
                       <View style={styles.badgeStats}>
+                        <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          🌡️ Temperatur: {worthData.tempOrigin}°C → {worthData.tempDest}°C (+{worthData.tempDelta}°C)
+                        </Text>
                         <Text style={[styles.badgeStat, { color: theme.primary }]}>
                           💨 ETA: {worthData.eta}h ({Math.round(destination.distance)}km)
                         </Text>

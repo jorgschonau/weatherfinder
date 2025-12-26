@@ -120,14 +120,24 @@ export function calculateWorthTheDrive(destination, origin, distanceKm) {
   // Value = weather gain per hour of travel
   const value = delta / (eta + 0.75); // +0.75 penalty factor
   
-  // Gating criteria
-  const MIN_WEATHER_SCORE = 60; // Destination must be decent
-  const MIN_DELTA = 5; // Must be meaningfully better than origin
+  // Temperature check: Destination MUST be warmer (core requirement!)
+  const tempDest = destination.temperature ?? 0;
+  const tempOrigin = origin.temperature ?? 0;
+  const tempDelta = tempDest - tempOrigin;
+  
+  // Gating criteria (stricter = only the best get the badge)
+  const MIN_WEATHER_SCORE = 70; // Destination must be GOOD (not just decent)
+  const MIN_DELTA = 10; // Must be SIGNIFICANTLY better than origin
+  const MIN_TEMP_ABSOLUTE = 4; // Destination must be at least 4°C (not freezing!)
+  const MIN_TEMP_DELTA = 5; // Destination must be MUCH warmer (+5°C minimum)
+  const MIN_VALUE = 2.5; // Must have good value (at least 2.5 pts per hour)
   
   const shouldAward = (
     weatherDest >= MIN_WEATHER_SCORE &&
     delta >= MIN_DELTA &&
-    value > 0
+    value >= MIN_VALUE && // Must have meaningful value
+    tempDest >= MIN_TEMP_ABSOLUTE && // Not freezing cold
+    tempDelta >= MIN_TEMP_DELTA // Actually warmer
   );
   
   // Final ranking score (for sorting multiple candidates)
@@ -139,6 +149,9 @@ export function calculateWorthTheDrive(destination, origin, distanceKm) {
     eta: Math.round(eta * 10) / 10,
     weatherDest: Math.round(weatherDest),
     weatherOrigin: Math.round(weatherOrigin),
+    tempDest: Math.round(tempDest),
+    tempOrigin: Math.round(tempOrigin),
+    tempDelta: Math.round(tempDelta),
     shouldAward,
     rankScore,
   };
@@ -158,13 +171,16 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
 
   // 1. Worth the Drive
   const worthResult = calculateWorthTheDrive(destination, userLocation, distanceKm);
-  destination._worthTheDriveData = worthResult; // Store for UI display
+  destination._worthTheDriveData = worthResult; // Store for UI display (even if no badge awarded)
   
   if (worthResult.shouldAward) {
+    // Additional check: Only award to TOP destinations (limit to best 3-5 per search)
+    // This will be enforced by limiting badges globally after all are calculated
     badges.push(DestinationBadge.WORTH_THE_DRIVE);
     console.log(
       `🚗 ${destination.name}: Worth it! ` +
-      `Delta: +${worthResult.delta} pts, ` +
+      `Temp: ${worthResult.tempOrigin}°C → ${worthResult.tempDest}°C (+${worthResult.tempDelta}°C), ` +
+      `Weather: ${worthResult.weatherOrigin} → ${worthResult.weatherDest} (+${worthResult.delta} pts), ` +
       `Value: ${worthResult.value} pts/h, ` +
       `ETA: ${worthResult.eta}h (${Math.round(distanceKm)}km)`
     );
