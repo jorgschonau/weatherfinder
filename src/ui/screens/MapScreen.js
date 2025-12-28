@@ -15,6 +15,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 import { BadgeMetadata } from '../../domain/destinationBadge';
 import { playTickSound } from '../../utils/soundUtils';
+import { generateWeatherWarnings } from '../../providers/weatherProvider';
 import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
 import OnboardingOverlay from '../components/OnboardingOverlay';
@@ -36,6 +37,8 @@ const MapScreen = ({ navigation }) => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showMockData, setShowMockData] = useState(true); // Toggle for mock data (temp for testing)
   const [showOnlyBadges, setShowOnlyBadges] = useState(false); // Toggle to show only destinations with badges
+  const [warnings, setWarnings] = useState([]); // Weather warnings
+  const [showWarnings, setShowWarnings] = useState(true); // Toggle for warnings display
 
   useEffect(() => {
     (async () => {
@@ -90,6 +93,14 @@ const MapScreen = ({ navigation }) => {
         selectedCondition
       );
       setDestinations(weatherData);
+      
+      // Generate warnings from destinations (independent of filter)
+      const generatedWarnings = generateWeatherWarnings(
+        weatherData,
+        location.latitude,
+        location.longitude
+      );
+      setWarnings(generatedWarnings);
     } catch (error) {
       Alert.alert(t('map.error'), t('map.failedToLoadWeather'));
       console.error(error);
@@ -222,6 +233,34 @@ const MapScreen = ({ navigation }) => {
             </View>
           </Marker>
         ))}
+
+        {/* Weather Warnings - Always shown (independent of weather filter) */}
+        {showWarnings && warnings.map((warning, index) => (
+          <Marker
+            key={`warning-${index}`}
+            coordinate={{ latitude: warning.location.latitude, longitude: warning.location.longitude }}
+            onPress={() => {
+              Alert.alert(
+                `⚠️ ${warning.label}`,
+                warning.description,
+                [{ text: 'OK', style: 'default' }]
+              );
+            }}
+          >
+            <View style={[
+              styles.warningMarkerContainer,
+              {
+                backgroundColor: warning.severity === 'extreme' ? '#8B0000' : '#FF4500',
+                borderColor: warning.severity === 'extreme' ? '#FF0000' : '#FFD700',
+              }
+            ]}>
+              <Text style={styles.warningIcon}>{warning.icon}</Text>
+              <View style={styles.warningSeverityBadge}>
+                <Text style={styles.warningSeverityText}>!</Text>
+              </View>
+            </View>
+          </Marker>
+        ))}
       </MapView>
 
       {/* Loading Overlay for destinations */}
@@ -273,6 +312,21 @@ const MapScreen = ({ navigation }) => {
         }}
       >
         <Text style={[styles.badgeToggleIcon, { color: showOnlyBadges ? '#000' : theme.text }]}>🏆</Text>
+      </TouchableOpacity>
+
+      {/* Warnings Toggle Button */}
+      <TouchableOpacity
+        style={[styles.warningsToggleButton, { 
+          backgroundColor: showWarnings ? '#FF4500' : theme.surface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow
+        }]}
+        onPress={() => {
+          setShowWarnings(!showWarnings);
+          playTickSound();
+        }}
+      >
+        <Text style={[styles.warningsToggleIcon, { color: showWarnings ? '#fff' : theme.text }]}>⚠️</Text>
       </TouchableOpacity>
 
       {/* Settings Button */}
@@ -671,6 +725,71 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     includeFontPadding: false,
     marginTop: 4,
+  },
+  warningsToggleButton: {
+    position: 'absolute',
+    top: 306, // Below badge toggle (232 + 64 + 10)
+    right: 10,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  warningsToggleIcon: {
+    fontSize: 36,
+    textAlign: 'center',
+    lineHeight: 36,
+    includeFontPadding: false,
+    marginTop: 4,
+  },
+  warningMarkerContainer: {
+    padding: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+    minHeight: 70,
+    borderWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  warningIcon: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  warningSeverityBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FFD700', // GELB
+    borderRadius: 6, // Etwas eckiger
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#000', // SCHWARZ
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+    elevation: 10,
+  },
+  warningSeverityText: {
+    color: '#000', // SCHWARZES AUSRUFEZEICHEN
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: -2,
   },
   settingsButton: {
     position: 'absolute',

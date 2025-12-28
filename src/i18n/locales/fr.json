@@ -91,6 +91,24 @@
     "warmAndDryDescription": "Chaleur maximale avec bonnes conditions",
     "bestStop": "Meilleur arrêt",
     "bestStopDescription": "Meilleur score: Météo + Environnement + Services"
+  },
+  "warnings": {
+    "title": "Alertes Météo",
+    "showWarnings": "Afficher les alertes",
+    "hideWarnings": "Masquer les alertes",
+    "noWarnings": "Aucune alerte",
+    "activeWarnings": "Alertes actives",
+    "fire": "Incendie",
+    "flood": "Inondation",
+    "wind": "Vent fort",
+    "storm": "Tempête",
+    "extremeHeat": "Chaleur extrême",
+    "extremeCold": "Froid extrême",
+    "snow": "Chutes de neige",
+    "ice": "Verglas",
+    "severe": "Alerte",
+    "extreme": "Danger!",
+    "validUntil": "Valable jusqu'à {{time}}"
   }
 }
 

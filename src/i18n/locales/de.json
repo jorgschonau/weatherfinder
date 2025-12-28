@@ -91,6 +91,24 @@
     "warmAndDryDescription": "Maximale Wärme bei gutem Wetter",
     "bestStop": "Bester Stopp",
     "bestStopDescription": "Top-Bewertung: Wetter + Umgebung + Versorgung"
+  },
+  "warnings": {
+    "title": "Wetterwarnungen",
+    "showWarnings": "Warnungen anzeigen",
+    "hideWarnings": "Warnungen ausblenden",
+    "noWarnings": "Keine Warnungen",
+    "activeWarnings": "Aktive Warnungen",
+    "fire": "Waldbrand",
+    "flood": "Hochwasser",
+    "wind": "Starker Wind",
+    "storm": "Sturm",
+    "extremeHeat": "Extremhitze",
+    "extremeCold": "Extremkälte",
+    "snow": "Schneefall",
+    "ice": "Eisregen",
+    "severe": "Warnung",
+    "extreme": "Gefahr!",
+    "validUntil": "Gültig bis {{time}}"
   }
 }
 

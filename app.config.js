@@ -2,29 +2,25 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: 'SunNomad',
-    slug: 'sunnomad',
-    version: '1.0.1',
+    name: 'WeatherFinder',
+    slug: 'weather-finder',
+    version: '1.0.0',
     orientation: 'portrait',
     userInterfaceStyle: 'light',
-    icon: './assets/icon.png',
     splash: {
-      image: './assets/splash-screen.png',
       resizeMode: 'contain',
-      backgroundColor: '#F5E6D3', // SunNomad cream/beige background
+      backgroundColor: '#2E7D32',
     },
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.sunnomad.app',
-      icon: './assets/icon.png',
+      bundleIdentifier: 'com.weatherfinder.app',
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#F5E6D3', // SunNomad cream/beige background
+        backgroundColor: '#2E7D32',
       },
-      package: 'com.sunnomad.app',
+      package: 'com.weatherfinder.app',
       permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'],
     },
     web: {},
@@ -33,7 +29,7 @@ export default {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            'Allow SunNomad to use your location to find sunny destinations.',
+            'Allow Weather Finder to use your location to find nearby destinations.',
         },
       ],
       'expo-localization',

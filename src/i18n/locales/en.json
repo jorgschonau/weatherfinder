@@ -91,6 +91,24 @@
     "warmAndDryDescription": "Max warmth with good conditions",
     "bestStop": "Best Stop",
     "bestStopDescription": "Top score: Weather + Area + Amenities"
+  },
+  "warnings": {
+    "title": "Weather Warnings",
+    "showWarnings": "Show Warnings",
+    "hideWarnings": "Hide Warnings",
+    "noWarnings": "No Warnings",
+    "activeWarnings": "Active Warnings",
+    "fire": "Wildfire",
+    "flood": "Flood",
+    "wind": "Strong Wind",
+    "storm": "Storm",
+    "extremeHeat": "Extreme Heat",
+    "extremeCold": "Extreme Cold",
+    "snow": "Snowfall",
+    "ice": "Ice Storm",
+    "severe": "Warning",
+    "extreme": "Danger!",
+    "validUntil": "Valid until {{time}}"
   }
 }
 

@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { calculateBadges } from '../domain/destinationBadge';
+import { parseWeatherAlert, shouldShowWarning, WarningType } from '../domain/weatherWarning';
 
 const API_BASE_URL = 'https://api.openweathermap.org/data/2.5';
 const SEARCH_URL = `${API_BASE_URL}/find`;
@@ -630,6 +631,130 @@ const setInCache = (key, data) => {
     data,
     timestamp: Date.now(),
   });
+};
+
+/**
+ * Generate weather warnings from extreme conditions
+ * TODO: Replace with real weather alerts API (NINA, Meteoalarm, etc.)
+ * For now, we detect extreme conditions from existing weather data
+ */
+export const generateWeatherWarnings = (destinations, userLat, userLon) => {
+  const warnings = [];
+  
+  destinations.forEach((dest) => {
+    // Skip user's current location
+    if (dest.isCurrentLocation) return;
+    
+    const warningsForLocation = [];
+    
+    // EXTREME COLD: < 5°C (demo threshold - will be stricter in production)
+    if (dest.temperature < 5) {
+      warningsForLocation.push({
+        id: `warning-cold-${dest.id}`,
+        type: WarningType.EXTREME_COLD,
+        severity: dest.temperature < -15 ? 'extreme' : 'severe',
+        title: `Extreme Kälte: ${Math.round(dest.temperature)}°C`,
+        description: `Gefährlich niedrige Temperaturen in ${dest.name}`,
+        location: {
+          name: dest.name,
+          latitude: dest.lat,
+          longitude: dest.lon,
+        },
+        icon: '❄️',
+        color: '#4169E1',
+        label: 'Extremkälte',
+        temperature: dest.temperature,
+        distance: dest.distance,
+      });
+    }
+    
+    // EXTREME HEAT: > 30°C
+    if (dest.temperature > 30) {
+      warningsForLocation.push({
+        id: `warning-heat-${dest.id}`,
+        type: WarningType.EXTREME_HEAT,
+        severity: dest.temperature > 40 ? 'extreme' : 'severe',
+        title: `Extremhitze: ${Math.round(dest.temperature)}°C`,
+        description: `Gefährlich hohe Temperaturen in ${dest.name}`,
+        location: {
+          name: dest.name,
+          latitude: dest.lat,
+          longitude: dest.lon,
+        },
+        icon: '🌡️',
+        color: '#FF6347',
+        label: 'Extremhitze',
+        temperature: dest.temperature,
+        distance: dest.distance,
+      });
+    }
+    
+    // STRONG WIND: > 20 km/h (demo - will be stricter in production)
+    if (dest.windSpeed > 20) {
+      warningsForLocation.push({
+        id: `warning-wind-${dest.id}`,
+        type: WarningType.WIND,
+        severity: dest.windSpeed > 50 ? 'extreme' : 'severe',
+        title: `Starker Wind: ${Math.round(dest.windSpeed)} km/h`,
+        description: `Gefährliche Windgeschwindigkeiten in ${dest.name}`,
+        location: {
+          name: dest.name,
+          latitude: dest.lat,
+          longitude: dest.lon,
+        },
+        icon: '💨',
+        color: '#87CEEB',
+        label: 'Starker Wind',
+        windSpeed: dest.windSpeed,
+        distance: dest.distance,
+      });
+    }
+    
+    // STORM: Combination of rain + wind
+    const isRainy = dest.condition && (dest.condition.includes('rain') || dest.condition.includes('rainy'));
+    if (isRainy && dest.windSpeed > 25) {
+      warningsForLocation.push({
+        id: `warning-storm-${dest.id}`,
+        type: WarningType.STORM,
+        severity: dest.windSpeed > 60 ? 'extreme' : 'severe',
+        title: `Sturm in ${dest.name}`,
+        description: `Starkregen mit Wind ${Math.round(dest.windSpeed)} km/h`,
+        location: {
+          name: dest.name,
+          latitude: dest.lat,
+          longitude: dest.lon,
+        },
+        icon: '⛈️',
+        color: '#4B0082',
+        label: 'Sturm',
+        windSpeed: dest.windSpeed,
+        distance: dest.distance,
+      });
+    }
+    
+    // Only add if we have warnings for this location
+    if (warningsForLocation.length > 0) {
+      // Pick the most severe warning for this location
+      const mostSevere = warningsForLocation.sort((a, b) => {
+        if (a.severity === 'extreme' && b.severity !== 'extreme') return -1;
+        if (b.severity === 'extreme' && a.severity !== 'extreme') return 1;
+        return 0;
+      })[0];
+      
+      warnings.push(mostSevere);
+    }
+  });
+  
+  // Limit to 10 most critical warnings (closest or most severe)
+  return warnings
+    .sort((a, b) => {
+      // Extreme severity comes first
+      if (a.severity === 'extreme' && b.severity !== 'extreme') return -1;
+      if (b.severity === 'extreme' && a.severity !== 'extreme') return 1;
+      // Then sort by distance (closest first)
+      return (a.distance || 0) - (b.distance || 0);
+    })
+    .slice(0, 10);
 };
 
 
