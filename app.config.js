@@ -4,14 +4,14 @@ export default {
   expo: {
     name: 'SunNomad',
     slug: 'sunnomad',
-    version: '1.0.0',
+    version: '1.0.1',
     orientation: 'portrait',
     userInterfaceStyle: 'light',
     icon: './assets/icon.png',
     splash: {
-      image: './assets/splash.png',
+      image: './assets/splash-screen.png',
       resizeMode: 'contain',
-      backgroundColor: '#FF8F00', // SunNomad orange/gold
+      backgroundColor: '#F5E6D3', // SunNomad cream/beige background
     },
     assetBundlePatterns: ['**/*'],
     ios: {
@@ -22,7 +22,7 @@ export default {
     android: {
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#FF8F00', // SunNomad orange/gold
+        backgroundColor: '#F5E6D3', // SunNomad cream/beige background
       },
       package: 'com.sunnomad.app',
       permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'],

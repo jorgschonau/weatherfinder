@@ -1,6 +1,7 @@
 {
   "app": {
     "title": "SunNomad",
+    "back": "Back",
     "destinationDetails": "Destination Details",
     "community": "Community",
     "settings": "Settings",
