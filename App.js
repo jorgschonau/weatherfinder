@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React, { useCallback, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as SplashScreen from 'expo-splash-screen';
@@ -9,8 +9,12 @@ import SettingsScreen from './src/ui/screens/SettingsScreen';
 import CommunityScreen from './src/ui/screens/CommunityScreen';
 import DestinationDetailScreen from './src/ui/screens/DestinationDetailScreen';
 import FavouritesScreen from './src/ui/screens/FavouritesScreen';
+import LoginScreen from './src/ui/screens/LoginScreen';
+import RegisterScreen from './src/ui/screens/RegisterScreen';
+import ProfileScreen from './src/ui/screens/ProfileScreen';
 
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
+import { AuthProvider } from './src/contexts/AuthContext';
 import './src/i18n';
 import { useTranslation } from 'react-i18next';
 
@@ -46,6 +50,7 @@ function AppNavigator() {
           },
         }}
       >
+        {/* Main App Screens */}
         <Stack.Screen
           name="Map"
           component={MapScreen}
@@ -86,6 +91,32 @@ function AppNavigator() {
             headerBackTitle: t('app.back'),
           }}
         />
+
+        {/* Auth Screens */}
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{
+            title: t('auth.login'),
+            headerBackTitle: t('app.back'),
+          }}
+        />
+        <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{
+            title: t('auth.signUp'),
+            headerBackTitle: t('app.back'),
+          }}
+        />
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{
+            title: t('profile.title', 'Profile'),
+            headerBackTitle: t('app.back'),
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -94,7 +125,9 @@ function AppNavigator() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppNavigator />
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

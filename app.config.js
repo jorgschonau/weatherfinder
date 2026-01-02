@@ -36,6 +36,9 @@ export default {
     ],
     extra: {
       openWeatherApiKey: process.env.OPENWEATHERMAP_API_KEY || '',
+      weatherbitApiKey: process.env.WEATHERBIT_API_KEY || '',
+      supabaseUrl: process.env.SUPABASE_URL || '',
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
     },
   },
 };

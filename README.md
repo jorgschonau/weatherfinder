@@ -10,6 +10,9 @@ A cross-platform mobile app built with React Native and Expo that helps nomads a
 - 📊 **Detailed Weather Info**: View comprehensive weather data including forecasts for the next 3 days
 - 🚗 **Navigation Integration**: Open destinations in Google Maps or Apple Maps with one tap
 - 🎨 **Modern UI**: Inspired by Komoot and Park4Night design aesthetics
+- 🔐 **User Authentication**: Sign up, login, and manage your profile with Supabase
+- ⭐ **Favourites System**: Save your favorite places (synced to cloud when logged in)
+- 👥 **Community Ready**: Backend infrastructure ready for ratings, reviews, and social features
 
 ## Setup
 
@@ -18,13 +21,22 @@ A cross-platform mobile app built with React Native and Expo that helps nomads a
 npm install
 ```
 
-2. Copy `.env.example` to `.env` and add your OpenWeatherMap API key:
+2. Create a `.env` file and add your API keys:
 ```bash
-cp .env.example .env
+touch .env
 ```
 ```
-OPENWEATHERMAP_API_KEY=your_real_key_here
+# Weather API
+OPENWEATHERMAP_API_KEY=your_openweathermap_key_here  # For frontend weather display
+
+# Supabase (optional - app works without backend)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_anon_key_here
+
+# Note: Backend weather updates use Open-Meteo (FREE, no API key needed!)
 ```
+
+**Note**: The app works without Supabase credentials, but auth and cloud sync features will be disabled.
 
 3. Start the development server:
 ```bash
@@ -36,11 +48,18 @@ npm start
 - Press `a` for Android emulator
 - Scan QR code with Expo Go app on your physical device
 
-### Real weather data
+### Weather Data
 
-- `app.config.js` loads `OPENWEATHERMAP_API_KEY` via `dotenv` and exposes it through `expo-constants`.
-- `src/providers/weatherProvider.js` now calls OpenWeatherMap's `box/city` endpoint for radius queries and `onecall` for detailed forecasts.
-- The provider gracefully falls back to mock data when the key is missing or the API fails, so the app always remains runnable locally.
+**Frontend (User-facing):**
+- `weatherProvider.js` uses OpenWeatherMap for real-time weather display in the app
+- Gracefully falls back to mock data when API is unavailable
+
+**Backend (Bulk Updates):**
+- `openMeteoService.js` uses Open-Meteo API for efficient updates
+- **FREE** - No API key needed!
+- Updates 20,000+ places with parallel requests
+- Fair-Use: 10,000+ requests/day
+- See [`API_ALTERNATIVES.md`](./API_ALTERNATIVES.md) for comparison
 
 ## Project Structure
 
@@ -66,43 +85,66 @@ npm start
 - **React Native Maps** - Map component
 - **Expo Location** - Location services
 - **Expo Linking** - Deep linking for navigation apps
+- **Supabase** - Backend (PostgreSQL, Auth, Storage)
+- **OpenWeatherMap API** - Frontend weather data
+- **Open-Meteo API** - Backend batch updates (FREE!)
+- **i18next** - Internationalization (EN, DE, FR)
 
-## Notes
+## Backend Setup (Optional)
 
-- Currently uses mock weather data for demonstration
-- Replace mock data with real API calls in `weatherService.js`
-- Location permissions are required for the app to function
-- The app works on both iOS and Android
+To enable authentication and cloud sync features, set up Supabase:
 
-## Future Enhancements
+1. Follow the detailed guide in [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)
+2. Create a free Supabase project at [supabase.com](https://supabase.com)
+3. Run the SQL schema from `supabase/schema.sql`
+4. Add your Supabase credentials to `.env`
 
-- Real-time weather API integration
-- Save favorite destinations
-- Weather alerts and notifications
-- Historical weather data
-- Social sharing features
+**Without Supabase**: The app works perfectly fine without backend integration. Features that require authentication (login, cloud favourites) will be disabled.
 
-## Planned Social Features (Future)
+## Implemented Features ✅
 
-The app architecture is designed to be easily extensible for social features:
+- ✅ Real-time weather API integration (OpenWeatherMap)
+- ✅ User authentication (Sign up, Login, Profile)
+- ✅ Save favorite destinations (local + cloud sync)
+- ✅ Multi-language support (EN, DE, FR)
+- ✅ Multiple theme options
+- ✅ Weather warnings and alerts
 
-### Planned Components:
-- **User Profiles**: Profile screens with avatar upload
-- **Friends List**: Add/remove friends, friend requests
-- **Live Feed**: Activity feed showing when friends start trips or arrive at destinations
-- **Push Notifications**: Real-time notifications for friend activities
-- **Privacy Settings**: Control who can see your trips and locations
+## Future Enhancements 🚀
 
-### Recommended Backend:
-- **Supabase** (cost-effective for ~5k active users/month: ~$25/month)
-  - PostgreSQL database for users, friends, activities
-  - Real-time subscriptions for live updates
-  - Storage for profile images
-  - Built-in authentication
+- 📸 Photo uploads for places
+- ⭐ User ratings and reviews for destinations
+- 👥 Social features (friends, activity feed)
+- 📊 Historical weather data analysis
+- 🔔 Push notifications for weather changes
+- 🗺️ Offline map support
 
-### Implementation Notes:
-- Current component structure (`src/components/`, `src/screens/`) is modular and ready for extension
-- Navigation structure can easily accommodate new screens (Profile, Friends, Feed)
-- i18n system already supports all text translations
-- Location tracking infrastructure is in place for trip detection
+## Architecture
+
+The app follows Clean Architecture principles with clear separation of concerns:
+
+```
+src/
+├── config/           # Configuration (Supabase client)
+├── contexts/         # React Context providers (Auth)
+├── domain/           # Business logic models
+├── i18n/             # Internationalization
+├── integrations/     # External API integrations
+├── providers/        # Data providers (Weather, Favourites)
+├── services/         # Backend services (Auth, Places, Profile)
+├── theme/            # Theming system
+├── ui/               # UI components and screens
+├── usecases/         # Use case implementations
+└── utils/            # Utility functions
+```
+
+### Key Design Decisions
+
+- **Supabase Backend**: Scalable PostgreSQL database with built-in auth, real-time subscriptions, and file storage
+- **Row Level Security**: All data protected with Supabase RLS policies
+- **Offline-First**: App works without backend, gracefully degrades features
+- **Modular Services**: Each service (auth, places, favourites) is independent and testable
+- **i18n Ready**: All text strings externalized for easy translation
+
+See [`FUTURE_FEATURES.md`](./FUTURE_FEATURES.md) for planned social features and community enhancements.
 

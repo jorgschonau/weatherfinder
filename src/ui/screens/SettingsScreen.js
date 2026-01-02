@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useAuth } from '../../contexts/AuthContext';
 
 const LANGUAGES = [
   { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
@@ -26,6 +27,7 @@ const THEMES = [
 const SettingsScreen = ({ navigation }) => {
   const { t, i18n } = useTranslation();
   const { theme, currentTheme, changeTheme } = useTheme();
+  const { isAuthenticated, user, profile } = useAuth();
 
   const handleSelectLanguage = (langCode) => {
     i18n.changeLanguage(langCode);
@@ -99,16 +101,46 @@ const SettingsScreen = ({ navigation }) => {
         ))}
       </View>
 
-      {/* Platzhalter für zukünftige Settings */}
+      {/* Account Section */}
       <View style={[styles.section, { backgroundColor: theme.surface }]}>
         <Text style={[styles.sectionTitle, { backgroundColor: theme.background, color: theme.text }]}>
           {t('settings.account')}
         </Text>
-        <View style={styles.placeholderItem}>
-          <Text style={[styles.placeholderText, { color: theme.textTertiary }]}>
-            {t('settings.comingSoon')}
-          </Text>
-        </View>
+        
+        {isAuthenticated ? (
+          <TouchableOpacity
+            style={[
+              styles.settingItem,
+              { backgroundColor: theme.surface, borderBottomColor: theme.background }
+            ]}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Text style={styles.settingItemFlag}>👤</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.settingItemText, { color: theme.text }]}>
+                {profile?.display_name || user?.email}
+              </Text>
+              <Text style={[styles.settingItemSubtext, { color: theme.textSecondary }]}>
+                {t('profile.title', 'View Profile')}
+              </Text>
+            </View>
+            <Text style={[styles.arrow, { color: theme.textSecondary }]}>›</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.settingItem,
+              { backgroundColor: theme.surface, borderBottomColor: theme.background }
+            ]}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.settingItemFlag}>🔐</Text>
+            <Text style={[styles.settingItemText, { color: theme.text }]}>
+              {t('auth.login')}
+            </Text>
+            <Text style={[styles.arrow, { color: theme.textSecondary }]}>›</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={[styles.section, { backgroundColor: theme.surface }]}>
@@ -159,6 +191,14 @@ const styles = StyleSheet.create({
   checkmark: {
     fontSize: 28,
     fontWeight: 'bold',
+  },
+  settingItemSubtext: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  arrow: {
+    fontSize: 32,
+    fontWeight: '300',
   },
   placeholderItem: {
     paddingHorizontal: 20,
