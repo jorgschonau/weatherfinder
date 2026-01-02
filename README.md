@@ -112,12 +112,12 @@ To enable authentication and cloud sync features, set up Supabase:
 
 ## Future Enhancements 🚀
 
-- 📸 Photo uploads for places
-- ⭐ User ratings and reviews for destinations
-- 👥 Social features (friends, activity feed)
-- 📊 Historical weather data analysis
+- 📸 Photo integration for places (Wikimedia, Unsplash)
+- 🏕️ Nearby campsites from OpenStreetMap
+- 🗺️ Place attributes (elevation, coast distance, terrain)
 - 🔔 Push notifications for weather changes
 - 🗺️ Offline map support
+- 🎯 Smart recommendations based on weather preferences
 
 ## Architecture
 
