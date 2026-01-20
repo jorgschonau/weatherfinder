@@ -87,10 +87,20 @@
   "badges": {
     "worthTheDrive": "Lohnt die Fahrt",
     "worthTheDriveDescription": "Bester Wetter-Gewinn pro km",
+    "worthTheDriveBudget": "Budget-Tipp",
+    "worthTheDriveBudgetDescription": "Gutes Wetter, näher dran - spart Sprit!",
     "warmAndDry": "Warm & Trocken",
     "warmAndDryDescription": "Maximale Wärme bei gutem Wetter",
-    "bestStop": "Bester Stopp",
-    "bestStopDescription": "Top-Bewertung: Wetter + Umgebung + Versorgung"
+    "beachParadise": "Strandparadies",
+    "beachParadiseDescription": "Perfektes Strandwetter - warm, sonnig, wenig Wind",
+    "sunnyStreak": "Sonnen-Serie",
+    "sunnyStreakDescription": "3+ Tage Sonne in Folge - stabiles Wetter!",
+    "weatherMiracle": "Wetter-Wunder",
+    "weatherMiracleDescription": "Ort verwandelt sich: Heute mies → Morgen sonnig & warm!",
+    "heatwave": "Hitzewelle",
+    "heatwaveDescription": "Sehr heiß (>30°C) für 2+ Tage",
+    "snowKing": "Schneekönig",
+    "snowKingDescription": "Viel Schnee (10+ mm) und kalt genug - perfekt zum Skifahren"
   },
   "warnings": {
     "title": "Wetterwarnungen",
