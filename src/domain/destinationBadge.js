@@ -185,37 +185,52 @@ export function calculateWorthTheDrive(destination, origin, distanceKm) {
 }
 
 /**
- * Calculate "Worth the Drive Budget" eligibility
- * Similar to Worth the Drive but favors closer destinations (budget-friendly)
+ * Calculate "Worth the Drive Budget" efficiency score
+ * RANKING SYSTEM: Best temp gain per km distance
+ * Only the TOP 1 destination gets the badge!
  * 
  * @param {Object} destination - Destination to evaluate
  * @param {Object} origin - User's current location
  * @param {number} distanceKm - Distance in km
- * @returns {Object} - { shouldAward, value, tempDelta, distance }
+ * @returns {Object} - { efficiency, tempDelta, distance, tempDest, eta, delta, value }
  */
 export function calculateWorthTheDriveBudget(destination, origin, distanceKm) {
   const tempDest = destination.temperature ?? 0;
   const tempOrigin = origin.temperature ?? 0;
   const tempDelta = tempDest - tempOrigin;
   
-  // Budget criteria: Shorter distance but still good weather improvement
-  const MAX_DISTANCE = 150; // Within 150km (budget-friendly!)
-  const MIN_TEMP_DELTA = 5; // Must be warmer (+5°C)
-  const MIN_TEMP_ABSOLUTE = 12; // Must be pleasantly warm
+  // Calculate ETA
+  const eta = calculateETA(distanceKm);
   
-  const shouldAward = (
-    distanceKm <= MAX_DISTANCE &&
-    tempDelta >= MIN_TEMP_DELTA &&
-    tempDest >= MIN_TEMP_ABSOLUTE
-  );
+  // Calculate weather scores for display
+  const weatherDest = calculateWeatherScore(destination);
+  const weatherOrigin = calculateWeatherScore(origin);
+  const delta = weatherDest - weatherOrigin;
   
-  const value = tempDelta / (distanceKm / 100); // Value per 100km
+  // Minimum criteria to be considered
+  const MIN_TEMP_DELTA = 3; // At least 3°C warmer
+  const MIN_TEMP_ABSOLUTE = 10; // At least 10°C (not freezing)
+  const MIN_DISTANCE = 1; // Avoid division by zero
+  
+  // Efficiency = temp gain per km (for ranking)
+  const efficiency = tempDelta / Math.max(distanceKm, MIN_DISTANCE);
+  
+  // Value = for display (temp gain per 100km, like before)
+  const value = tempDelta / (distanceKm / 100);
+  
+  // Eligible if warmer and not freezing
+  const isEligible = tempDelta >= MIN_TEMP_DELTA && tempDest >= MIN_TEMP_ABSOLUTE;
   
   return {
-    shouldAward,
-    value: Math.round(value * 10) / 10,
+    efficiency: Math.round(efficiency * 1000) / 1000, // 3 decimals
     tempDelta: Math.round(tempDelta),
+    tempDest: Math.round(tempDest),
+    tempOrigin: Math.round(tempOrigin),
     distance: Math.round(distanceKm),
+    eta: Math.round(eta * 10) / 10,
+    delta: Math.round(delta),
+    value: Math.round(value * 10) / 10,
+    isEligible,
   };
 }
 
@@ -515,19 +530,12 @@ export function calculateSnowKing(destination) {
 export function calculateBadges(destination, userLocation, distanceKm, allDestinations = []) {
   const badges = [];
 
-  // 1. Worth the Drive Budget (PRIORITY 1!)
+  // 1. Worth the Drive Budget - RANKING SYSTEM (PRIORITY 1!)
+  // Calculate efficiency for this destination
   const budgetResult = calculateWorthTheDriveBudget(destination, userLocation, distanceKm);
   destination._worthTheDriveBudgetData = budgetResult;
   
-  if (budgetResult.shouldAward) {
-    badges.push(DestinationBadge.WORTH_THE_DRIVE_BUDGET);
-    console.log(
-      `💰 ${destination.name}: Budget-Friendly! ` +
-      `Temp: ${budgetResult.tempDelta}°C gain, ` +
-      `Distance: ${budgetResult.distance}km, ` +
-      `Value: ${budgetResult.value} pts/100km`
-    );
-  }
+  // Badge is awarded later after comparing all destinations (see below)
 
   // 2. Worth the Drive (PRIORITY 2!)
   const worthResult = calculateWorthTheDrive(destination, userLocation, distanceKm);

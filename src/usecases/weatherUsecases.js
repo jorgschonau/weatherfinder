@@ -47,27 +47,36 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
   
   // Limit certain badges to prevent overcrowding
   const MAX_WORTH_THE_DRIVE_BADGES = 3;
-  const MAX_WORTH_THE_DRIVE_BUDGET_BADGES = 3;
+  
+  // "Worth the Drive Budget" - RANKING SYSTEM: Only TOP 1 gets the badge!
+  // Award this FIRST before Worth the Drive
+  const budgetCandidates = destinations
+    .filter(d => !d.isCurrentLocation && d._worthTheDriveBudgetData?.isEligible)
+    .sort((a, b) => (b._worthTheDriveBudgetData?.efficiency || 0) - (a._worthTheDriveBudgetData?.efficiency || 0));
+  
+  // Award badge ONLY to the best one
+  if (budgetCandidates.length > 0) {
+    const winner = budgetCandidates[0];
+    winner.badges.push('WORTH_THE_DRIVE_BUDGET');
+    // REMOVE Worth the Drive if present (Budget is exclusive!)
+    winner.badges = winner.badges.filter(b => b !== 'WORTH_THE_DRIVE');
+    console.log(
+      `💰 ${winner.name}: Budget Winner! ` +
+      `Efficiency: ${winner._worthTheDriveBudgetData.efficiency.toFixed(3)} °C/km, ` +
+      `Temp: +${winner._worthTheDriveBudgetData.tempDelta}°C, ` +
+      `Distance: ${winner._worthTheDriveBudgetData.distance}km`
+    );
+  }
   
   // Limit "Worth the Drive" to top 3 by temperature
+  // EXCLUDE destinations that already have Budget badge!
   const worthTheDriveCandidates = destinations
-    .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE'))
+    .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE') && !d.badges.includes('WORTH_THE_DRIVE_BUDGET'))
     .sort((a, b) => (b._worthTheDriveData?.tempDest || 0) - (a._worthTheDriveData?.tempDest || 0));
   
   if (worthTheDriveCandidates.length > MAX_WORTH_THE_DRIVE_BADGES) {
     worthTheDriveCandidates.slice(MAX_WORTH_THE_DRIVE_BADGES).forEach(dest => {
       dest.badges = dest.badges.filter(b => b !== 'WORTH_THE_DRIVE');
-    });
-  }
-  
-  // Limit "Worth the Drive Budget" to top 3 by value
-  const budgetCandidates = destinations
-    .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE_BUDGET'))
-    .sort((a, b) => (b._worthTheDriveBudgetData?.value || 0) - (a._worthTheDriveBudgetData?.value || 0));
-  
-  if (budgetCandidates.length > MAX_WORTH_THE_DRIVE_BUDGET_BADGES) {
-    budgetCandidates.slice(MAX_WORTH_THE_DRIVE_BUDGET_BADGES).forEach(dest => {
-      dest.badges = dest.badges.filter(b => b !== 'WORTH_THE_DRIVE_BUDGET');
     });
   }
   
@@ -86,7 +95,7 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
   
   console.log(
     `🏆 Awarded ${totalBadges} badges to ${destWithBadges.length} destinations:\n` +
-    `  💰 Budget: ${budgetCount}/${budgetCandidates.length} (limited to 3)\n` +
+    `  💰 Budget: ${budgetCount}/${budgetCandidates.length} (TOP 1 ONLY)\n` +
     `  🚗 Worth: ${worthCount}/${worthTheDriveCandidates.length} (limited to 3)\n` +
     `  ☀️ Warm&Dry: ${warmDryCount} (unlimited)\n` +
     `  🌊 Beach: ${beachCount} (unlimited)\n` +

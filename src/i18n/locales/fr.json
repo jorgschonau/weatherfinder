@@ -26,7 +26,25 @@
     "cloudy": "Nuageux",
     "rainy": "Pluvieux",
     "snowy": "Neigeux",
-    "windy": "Venteux"
+    "windy": "Venteux",
+    "conditions": {
+      "clearSky": "Ciel dégagé",
+      "fewClouds": "Peu nuageux",
+      "scatteredClouds": "Nuages dispersés",
+      "brokenClouds": "Nuages fragmentés",
+      "overcastClouds": "Couvert",
+      "lightRain": "Pluie légère",
+      "moderateRain": "Pluie modérée",
+      "heavyRain": "Forte pluie",
+      "lightSnow": "Neige légère",
+      "moderateSnow": "Neige modérée",
+      "heavySnow": "Forte neige",
+      "sleet": "Neige fondue",
+      "drizzle": "Bruine",
+      "thunderstorm": "Orage",
+      "mist": "Brume",
+      "fog": "Brouillard"
+    }
   },
   "mapType": {
     "standard": "Standard",
@@ -85,22 +103,22 @@
     "savedOn": "Enregistré le {{date}}"
   },
   "badges": {
-    "worthTheDrive": "Vaut le détour",
-    "worthTheDriveDescription": "Meilleur gain météo par km",
-    "worthTheDriveBudget": "Choix Budget",
-    "worthTheDriveBudgetDescription": "Bon temps, plus proche - économise du carburant!",
-    "warmAndDry": "Chaud & Sec",
-    "warmAndDryDescription": "Chaleur maximale avec bonnes conditions",
-    "beachParadise": "Paradis de Plage",
-    "beachParadiseDescription": "Temps parfait pour la plage - chaud, ensoleillé, vent léger",
-    "sunnyStreak": "Série de Soleil",
-    "sunnyStreakDescription": "3+ jours de soleil d'affilée - temps stable!",
-    "weatherMiracle": "Miracle Météo",
-    "weatherMiracleDescription": "Le lieu se transforme: Mauvais aujourd'hui → Ensoleillé & chaud demain!",
+    "worththedrive": "Vaut le détour",
+    "worththedriveDescription": "Meilleur gain météo par km",
+    "worththedrivebudget": "Choix Budget",
+    "worththedrivebudgetDescription": "Bon temps, plus proche - économise du carburant!",
+    "warmanddry": "Chaud & Sec",
+    "warmanddryDescription": "Chaleur maximale avec bonnes conditions",
+    "beachparadise": "Paradis de Plage",
+    "beachparadiseDescription": "Temps parfait pour la plage - chaud, ensoleillé, vent léger",
+    "sunnystreak": "Série de Soleil",
+    "sunnystreakDescription": "3+ jours de soleil d'affilée - temps stable!",
+    "weathermiracle": "Miracle Météo",
+    "weathermiracleDescription": "Le lieu se transforme: Mauvais aujourd'hui → Ensoleillé & chaud demain!",
     "heatwave": "Canicule",
     "heatwaveDescription": "Très chaud (>30°C) pendant 2+ jours",
-    "snowKing": "Roi des Neiges",
-    "snowKingDescription": "Beaucoup de neige (10+ mm) et assez froid - parfait pour le ski"
+    "snowking": "Roi des Neiges",
+    "snowkingDescription": "Beaucoup de neige (10+ mm) et assez froid - parfait pour le ski"
   },
   "warnings": {
     "title": "Alertes Météo",

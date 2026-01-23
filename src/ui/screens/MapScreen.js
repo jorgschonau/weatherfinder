@@ -18,7 +18,6 @@ import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../../usec
 import { BadgeMetadata } from '../../domain/destinationBadge';
 import { playTickSound, playDingSound } from '../../utils/soundUtils';
 // Badges are now calculated in weatherUsecases.js, not here!
-import RadiusSelector from '../components/RadiusSelector';
 import WeatherFilter from '../components/WeatherFilter';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 import AnimatedBadge from '../components/AnimatedBadge';
@@ -47,6 +46,7 @@ const MapScreen = ({ navigation }) => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showMockData, setShowMockData] = useState(true); // Toggle for mock data (temp for testing)
   const [showOnlyBadges, setShowOnlyBadges] = useState(false); // Toggle to show only destinations with badges
+  const [showRadiusMenu, setShowRadiusMenu] = useState(false); // Dropdown for radius selection
   // const [warnings, setWarnings] = useState([]); // Weather warnings - DISABLED
   // const [showWarnings, setShowWarnings] = useState(true); // Toggle for warnings display - DISABLED
   // const [showSearch, setShowSearch] = useState(false); // Toggle search bar - DISABLED (MapSearchBar component missing)
@@ -332,6 +332,12 @@ const MapScreen = ({ navigation }) => {
   const handleRadiusDecrease = async () => {
     const newRadius = radius - 50;
     setRadius(Math.max(newRadius, 50)); // Min 50 km
+    await playDingSound(); // Play ding sound on interaction
+  };
+
+  const handleRadiusSelect = async (newRadius) => {
+    setRadius(newRadius);
+    setShowRadiusMenu(false);
     await playDingSound(); // Play ding sound on interaction
   };
 
@@ -1022,7 +1028,6 @@ const MapScreen = ({ navigation }) => {
             borderColor: theme.border,
             shadowColor: theme.shadow
           }]}>
-            <RadiusSelector selectedRadius={radius} onRadiusChange={setRadius} />
             <WeatherFilter
               selectedCondition={selectedCondition}
               onConditionChange={setSelectedCondition}
@@ -1032,19 +1037,48 @@ const MapScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.radiusControlsWrapper}>
-        <View style={[styles.radiusDisplay, {
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
-          shadowColor: theme.shadow
-        }]}>
+        {showRadiusMenu && (
+          <View style={[styles.radiusPresetMenu, {
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            shadowColor: theme.shadow
+          }]}>
+            {[200, 400, 1000, 2000].map((radiusOption) => (
+              <TouchableOpacity
+                key={radiusOption}
+                style={[styles.radiusPresetItem, radiusOption === radius && styles.radiusPresetItemActive]}
+                onPress={() => handleRadiusSelect(radiusOption)}
+              >
+                <Text style={[
+                  styles.radiusPresetText,
+                  { color: radiusOption === radius ? theme.primary : theme.text }
+                ]}>
+                  {radiusOption} km
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        
+        <TouchableOpacity 
+          style={[styles.radiusDisplay, {
+            backgroundColor: theme.surface,
+            borderColor: showRadiusMenu ? theme.primary : theme.border,
+            shadowColor: theme.shadow
+          }]}
+          onPress={() => setShowRadiusMenu(!showRadiusMenu)}
+          accessibilityLabel={t('radius.title')}
+          accessibilityRole="button"
+        >
           <Text style={[styles.radiusLabel, { color: theme.textTertiary }]}>{t('radius.title')}</Text>
           <Text style={[styles.radiusDisplayText, { color: theme.text }]}>{radius} km</Text>
-        </View>
+        </TouchableOpacity>
         <View style={[styles.radiusControls, {
           backgroundColor: theme.surface,
           borderColor: theme.border,
           shadowColor: theme.shadow
         }]}>
+          {/* + Button */}
           <TouchableOpacity
             style={[styles.radiusButton, styles.radiusButtonTop, {
               backgroundColor: theme.background
@@ -1057,6 +1091,8 @@ const MapScreen = ({ navigation }) => {
             <Text style={[styles.radiusButtonText, { color: theme.text }]}>+</Text>
             <Text style={[styles.radiusButtonLabel, { color: theme.textSecondary }]}>{t('radius.more')}</Text>
           </TouchableOpacity>
+          
+          {/* - Button */}
           <TouchableOpacity
             style={[styles.radiusButton, styles.radiusButtonBottom, {
               backgroundColor: theme.background
@@ -1334,18 +1370,19 @@ const styles = StyleSheet.create({
     borderColor: '#BDBDBD',
   },
   radiusButtonTop: {
-    borderRightWidth: 1,
-    borderRightColor: '#E0E0E0',
     borderTopLeftRadius: 8,
     borderBottomLeftRadius: 8,
     borderTopWidth: 0,
     borderBottomWidth: 0,
     borderLeftWidth: 0,
+    borderRightWidth: 1,
+    borderRightColor: '#E0E0E0',
   },
   radiusButtonBottom: {
     borderTopWidth: 0,
     borderBottomWidth: 0,
     borderRightWidth: 0,
+    borderLeftWidth: 0,
     borderTopRightRadius: 8,
     borderBottomRightRadius: 8,
   },
@@ -1358,6 +1395,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
+  },
+  radiusPresetMenu: {
+    position: 'absolute',
+    bottom: 160,
+    right: 0,
+    borderWidth: 2,
+    borderRadius: 16,
+    paddingVertical: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 8,
+    minWidth: 140,
+    zIndex: 1000,
+  },
+  radiusPresetItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  radiusPresetItemActive: {
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  radiusPresetText: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   mapTypeButton: {
     position: 'absolute',

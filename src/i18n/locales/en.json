@@ -26,7 +26,25 @@
     "cloudy": "Cloudy",
     "rainy": "Rainy",
     "snowy": "Snowy",
-    "windy": "Windy"
+    "windy": "Windy",
+    "conditions": {
+      "clearSky": "Clear sky",
+      "fewClouds": "Few clouds",
+      "scatteredClouds": "Scattered clouds",
+      "brokenClouds": "Broken clouds",
+      "overcastClouds": "Overcast clouds",
+      "lightRain": "Light rain",
+      "moderateRain": "Moderate rain",
+      "heavyRain": "Heavy rain",
+      "lightSnow": "Light snow",
+      "moderateSnow": "Moderate snow",
+      "heavySnow": "Heavy snow",
+      "sleet": "Sleet",
+      "drizzle": "Drizzle",
+      "thunderstorm": "Thunderstorm",
+      "mist": "Mist",
+      "fog": "Fog"
+    }
   },
   "mapType": {
     "standard": "Standard",
@@ -85,22 +103,22 @@
     "savedOn": "Saved on {{date}}"
   },
   "badges": {
-    "worthTheDrive": "Worth the Drive",
-    "worthTheDriveDescription": "Best weather gain per km",
-    "worthTheDriveBudget": "Budget Pick",
-    "worthTheDriveBudgetDescription": "Good weather, closer distance - saves fuel!",
-    "warmAndDry": "Warm & Dry",
-    "warmAndDryDescription": "Max warmth with good conditions",
-    "beachParadise": "Beach Paradise",
-    "beachParadiseDescription": "Perfect beach weather - warm, sunny, light wind",
-    "sunnyStreak": "Sunny Streak",
-    "sunnyStreakDescription": "3+ days of sunshine in a row - stable weather!",
-    "weatherMiracle": "Weather Miracle",
-    "weatherMiracleDescription": "Place transforms: Bad today → Sunny & warm tomorrow!",
+    "worththedrive": "Worth the Drive",
+    "worththedriveDescription": "Best weather gain per km",
+    "worththedrivebudget": "Budget Pick",
+    "worththedrivebudgetDescription": "Good weather, closer distance - saves fuel!",
+    "warmanddry": "Warm & Dry",
+    "warmanddryDescription": "Max warmth with good conditions",
+    "beachparadise": "Beach Paradise",
+    "beachparadiseDescription": "Perfect beach weather - warm, sunny, light wind",
+    "sunnystreak": "Sunny Streak",
+    "sunnystreakDescription": "3+ days of sunshine in a row - stable weather!",
+    "weathermiracle": "Weather Miracle",
+    "weathermiracleDescription": "Place transforms: Bad today → Sunny & warm tomorrow!",
     "heatwave": "Heatwave",
     "heatwaveDescription": "Very hot (>30°C) for 2+ days",
-    "snowKing": "Snow King",
-    "snowKingDescription": "Heavy snow (10+ mm) and cold enough - perfect for skiing"
+    "snowking": "Snow King",
+    "snowkingDescription": "Heavy snow (10+ mm) and cold enough - perfect for skiing"
   },
   "warnings": {
     "title": "Weather Warnings",

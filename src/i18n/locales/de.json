@@ -26,7 +26,25 @@
     "cloudy": "Bewölkt",
     "rainy": "Regnerisch",
     "snowy": "Schnee",
-    "windy": "Windig"
+    "windy": "Windig",
+    "conditions": {
+      "clearSky": "Klarer Himmel",
+      "fewClouds": "Leicht bewölkt",
+      "scatteredClouds": "Aufgelockerte Bewölkung",
+      "brokenClouds": "Überwiegend bewölkt",
+      "overcastClouds": "Bedeckt",
+      "lightRain": "Leichter Regen",
+      "moderateRain": "Mäßiger Regen",
+      "heavyRain": "Starker Regen",
+      "lightSnow": "Leichter Schneefall",
+      "moderateSnow": "Mäßiger Schneefall",
+      "heavySnow": "Starker Schneefall",
+      "sleet": "Schneeregen",
+      "drizzle": "Nieselregen",
+      "thunderstorm": "Gewitter",
+      "mist": "Nebel",
+      "fog": "Nebel"
+    }
   },
   "mapType": {
     "standard": "Standard",
@@ -85,22 +103,22 @@
     "savedOn": "Gespeichert am {{date}}"
   },
   "badges": {
-    "worthTheDrive": "Lohnt die Fahrt",
-    "worthTheDriveDescription": "Bester Wetter-Gewinn pro km",
-    "worthTheDriveBudget": "Budget-Tipp",
-    "worthTheDriveBudgetDescription": "Gutes Wetter, näher dran - spart Sprit!",
-    "warmAndDry": "Warm & Trocken",
-    "warmAndDryDescription": "Maximale Wärme bei gutem Wetter",
-    "beachParadise": "Strandparadies",
-    "beachParadiseDescription": "Perfektes Strandwetter - warm, sonnig, wenig Wind",
-    "sunnyStreak": "Sonnen-Serie",
-    "sunnyStreakDescription": "3+ Tage Sonne in Folge - stabiles Wetter!",
-    "weatherMiracle": "Wetter-Wunder",
-    "weatherMiracleDescription": "Ort verwandelt sich: Heute mies → Morgen sonnig & warm!",
+    "worththedrive": "Lohnt die Fahrt",
+    "worththedriveDescription": "Bester Wetter-Gewinn pro km",
+    "worththedrivebudget": "Budget-Tipp",
+    "worththedrivebudgetDescription": "Gutes Wetter, näher dran - spart Sprit!",
+    "warmanddry": "Warm & Trocken",
+    "warmanddryDescription": "Maximale Wärme bei gutem Wetter",
+    "beachparadise": "Strandparadies",
+    "beachparadiseDescription": "Perfektes Strandwetter - warm, sonnig, wenig Wind",
+    "sunnystreak": "Sonnen-Serie",
+    "sunnystreakDescription": "3+ Tage Sonne in Folge - stabiles Wetter!",
+    "weathermiracle": "Wetter-Wunder",
+    "weathermiracleDescription": "Ort verwandelt sich: Heute mies → Morgen sonnig & warm!",
     "heatwave": "Hitzewelle",
     "heatwaveDescription": "Sehr heiß (>30°C) für 2+ Tage",
-    "snowKing": "Schneekönig",
-    "snowKingDescription": "Viel Schnee (10+ mm) und kalt genug - perfekt zum Skifahren"
+    "snowking": "Schneekönig",
+    "snowkingDescription": "Viel Schnee (10+ mm) und kalt genug - perfekt zum Skifahren"
   },
   "warnings": {
     "title": "Wetterwarnungen",
