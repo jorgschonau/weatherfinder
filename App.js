@@ -15,6 +15,7 @@ import ProfileScreen from './src/ui/screens/ProfileScreen';
 
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { UnitProvider } from './src/contexts/UnitContext';
 import './src/i18n';
 import { useTranslation } from 'react-i18next';
 
@@ -125,9 +126,11 @@ function AppNavigator() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
+      <UnitProvider>
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </UnitProvider>
     </ThemeProvider>
   );
 }

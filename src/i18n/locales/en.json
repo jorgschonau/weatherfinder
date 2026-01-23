@@ -81,7 +81,14 @@
     "language": "Language",
     "account": "Account",
     "preferences": "Preferences",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "units": "Units",
+    "distanceUnit": "Distance",
+    "temperatureUnit": "Temperature",
+    "kilometers": "Kilometers (km)",
+    "miles": "Miles (mi)",
+    "celsius": "Celsius (°C)",
+    "fahrenheit": "Fahrenheit (°F)"
   },
   "onboarding": {
     "welcome": "Welcome!",
@@ -118,7 +125,11 @@
     "heatwave": "Heatwave",
     "heatwaveDescription": "Very hot (>30°C) for 2+ days",
     "snowking": "Snow King",
-    "snowkingDescription": "Heavy snow (10+ mm) and cold enough - perfect for skiing"
+    "snowkingDescription": "Heavy snow (10+ mm) and cold enough - perfect for skiing",
+    "rainydays": "Rainy Days",
+    "rainydaysDescription": "3+ rainy days with at least 1 heavy rain",
+    "weathercurse": "Weather Curse",
+    "weathercurseDescription": "Good now but will turn bad & colder (-5°C)"
   },
   "warnings": {
     "title": "Weather Warnings",

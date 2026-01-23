@@ -938,6 +938,7 @@ const MapScreen = ({ navigation }) => {
                 <View style={styles.badgeOverlayContainer}>
                   {dest.badges
                     .sort((a, b) => (BadgeMetadata[a]?.priority || 99) - (BadgeMetadata[b]?.priority || 99)) // Sort by priority
+                    .slice(0, 6) // Max 6 badges per marker
                     .map((badge, badgeIndex) => (
                       <AnimatedBadge
                         key={badgeIndex}

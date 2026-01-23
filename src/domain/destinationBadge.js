@@ -9,8 +9,10 @@ export const DestinationBadge = {
   BEACH_PARADISE: 'BEACH_PARADISE', // Coastal location with perfect beach weather
   SUNNY_STREAK: 'SUNNY_STREAK', // 3+ days of sunshine in a row (stable good weather)
   WEATHER_MIRACLE: 'WEATHER_MIRACLE', // Place transforms from bad to great weather (today bad → tomorrow sunny!)
-  HEATWAVE: 'HEATWAVE', // >30°C for 2+ days (warning implied by color)
+  HEATWAVE: 'HEATWAVE', // 3+ days >32°C with no rain
   SNOW_KING: 'SNOW_KING', // Reliable snow conditions - perfect for skiing
+  RAINY_DAYS: 'RAINY_DAYS', // 3+ rainy days with at least 1 heavy rain
+  WEATHER_CURSE: 'WEATHER_CURSE', // Good weather now but will turn bad soon
 };
 
 /**
@@ -56,6 +58,16 @@ export const BadgeMetadata = {
     icon: '⛄',
     color: '#2196F3', // Blue (winter cold)
     priority: 7,
+  },
+  [DestinationBadge.RAINY_DAYS]: {
+    icon: '🌧️',
+    color: '#607D8B', // Gray-blue
+    priority: 8,
+  },
+  [DestinationBadge.WEATHER_CURSE]: {
+    icon: '⛈️',
+    color: '#37474F', // Dark gray (storm cloud)
+    priority: 9,
   },
 };
 
@@ -392,22 +404,29 @@ export function calculateWeatherMiracle(destination) {
 
 /**
  * Calculate "Heatwave" eligibility
- * 2+ days above 30°C
+ * 3+ days above 32°C with no rain
  * 
  * @param {Object} destination - Destination with forecast data
  * @returns {Object} - { shouldAward, hotDays, maxTemp }
  */
 export function calculateHeatwave(destination) {
   const currentTemp = destination.temperature ?? 0;
+  const currentCondition = destination.condition ?? 'unknown';
   const forecast = destination.forecast;
   
-  let hotDays = currentTemp >= 30 ? 1 : 0;
+  // Check for rain conditions
+  const hasRain = currentCondition === 'rainy' || 
+                  forecast?.today?.condition === 'rainy' ||
+                  forecast?.tomorrow?.condition === 'rainy' ||
+                  forecast?.day3?.condition === 'rainy';
+  
+  let hotDays = currentTemp >= 32 ? 1 : 0;
   let maxTemp = currentTemp;
   
   if (forecast) {
-    if (forecast.today?.high >= 30) hotDays++;
-    if (forecast.tomorrow?.high >= 30) hotDays++;
-    if (forecast.day3?.high >= 30) hotDays++;
+    if (forecast.today?.high >= 32) hotDays++;
+    if (forecast.tomorrow?.high >= 32) hotDays++;
+    if (forecast.day3?.high >= 32) hotDays++;
     
     maxTemp = Math.max(
       maxTemp,
@@ -417,9 +436,9 @@ export function calculateHeatwave(destination) {
     );
   }
   
-  // Badge criteria: 2+ days > 30°C
-  const MIN_HOT_DAYS = 2;
-  const shouldAward = hotDays >= MIN_HOT_DAYS;
+  // Badge criteria: 3+ days > 32°C AND no rain
+  const MIN_HOT_DAYS = 3;
+  const shouldAward = hotDays >= MIN_HOT_DAYS && !hasRain;
   
   return {
     shouldAward,
@@ -536,6 +555,109 @@ export function calculateSnowKing(destination) {
 }
 
 /**
+ * Calculate "Rainy Days" eligibility
+ * 3+ rainy days with at least 1 heavy rain
+ * 
+ * @param {Object} destination - Destination with forecast data
+ * @returns {Object} - { shouldAward, rainyDays, hasHeavyRain }
+ */
+export function calculateRainyDays(destination) {
+  const currentCondition = destination.condition ?? 'unknown';
+  const forecast = destination.forecast;
+  
+  // Count rainy days
+  let rainyDays = currentCondition === 'rainy' ? 1 : 0;
+  let hasHeavyRain = false;
+  
+  // Check current for heavy rain
+  const currentDesc = destination.description?.toLowerCase() || '';
+  if (currentDesc.includes('heavy') || currentDesc.includes('intense')) {
+    hasHeavyRain = true;
+  }
+  
+  if (forecast) {
+    if (forecast.today?.condition === 'rainy') {
+      rainyDays++;
+      const todayDesc = forecast.today?.description?.toLowerCase() || '';
+      if (todayDesc.includes('heavy') || todayDesc.includes('intense')) {
+        hasHeavyRain = true;
+      }
+    }
+    if (forecast.tomorrow?.condition === 'rainy') {
+      rainyDays++;
+      const tomorrowDesc = forecast.tomorrow?.description?.toLowerCase() || '';
+      if (tomorrowDesc.includes('heavy') || tomorrowDesc.includes('intense')) {
+        hasHeavyRain = true;
+      }
+    }
+    if (forecast.day3?.condition === 'rainy') {
+      rainyDays++;
+      const day3Desc = forecast.day3?.description?.toLowerCase() || '';
+      if (day3Desc.includes('heavy') || day3Desc.includes('intense')) {
+        hasHeavyRain = true;
+      }
+    }
+  }
+  
+  // Badge criteria: 3+ rainy days AND at least 1 heavy rain
+  const MIN_RAINY_DAYS = 3;
+  const shouldAward = rainyDays >= MIN_RAINY_DAYS && hasHeavyRain;
+  
+  return {
+    shouldAward,
+    rainyDays,
+    hasHeavyRain,
+  };
+}
+
+/**
+ * Calculate "Weather Curse" eligibility
+ * Good weather now but will turn bad soon (opposite of Weather Miracle)
+ * 
+ * @param {Object} destination - Destination with forecast data
+ * @returns {Object} - { shouldAward, todayCondition, futureCondition, tempLoss }
+ */
+export function calculateWeatherCurse(destination) {
+  const todayCondition = destination.condition ?? 'unknown';
+  const todayTemp = destination.temperature ?? 0;
+  const forecast = destination.forecast;
+  
+  if (!forecast) {
+    return { shouldAward: false };
+  }
+  
+  // Check for transformation: good today → bad tomorrow/day3
+  const GOOD_CONDITIONS = ['sunny', 'cloudy'];
+  const isGoodToday = GOOD_CONDITIONS.includes(todayCondition);
+  
+  const BAD_CONDITIONS = ['rainy', 'snowy', 'windy'];
+  const tomorrowBad = BAD_CONDITIONS.includes(forecast.tomorrow?.condition);
+  const day3Bad = BAD_CONDITIONS.includes(forecast.day3?.condition);
+  
+  const tomorrowTemp = forecast.tomorrow?.temp ?? todayTemp;
+  const day3Temp = forecast.day3?.temp ?? todayTemp;
+  const futureTempMin = Math.min(tomorrowTemp, day3Temp);
+  const tempLoss = todayTemp - futureTempMin;
+  
+  // Badge criteria: good today AND bad future AND colder
+  const MIN_TEMP_LOSS = 5; // Must get colder by at least 5°C
+  const shouldAward = (
+    isGoodToday &&
+    (tomorrowBad || day3Bad) &&
+    tempLoss >= MIN_TEMP_LOSS
+  );
+  
+  return {
+    shouldAward,
+    todayCondition,
+    todayTemp,
+    futureCondition: tomorrowBad ? forecast.tomorrow?.condition : forecast.day3?.condition,
+    futureTempMin,
+    tempLoss,
+  };
+}
+
+/**
  * Calculate badge eligibility for a destination
  * 
  * @param {Object} destination - The destination to evaluate
@@ -644,6 +766,32 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
       `⛄ ${destination.name}: Snow King! ` +
       `${snowKingResult.reason} ` +
       `(${snowKingResult.snowDays} snowy days, ${snowKingResult.snowfallAmount.toFixed(1)}mm/24h)`
+    );
+  }
+
+  // 9. Rainy Days
+  const rainyDaysResult = calculateRainyDays(destination);
+  destination._rainyDaysData = rainyDaysResult;
+  
+  if (rainyDaysResult.shouldAward) {
+    badges.push(DestinationBadge.RAINY_DAYS);
+    console.log(
+      `🌧️ ${destination.name}: Rainy Days! ` +
+      `${rainyDaysResult.rainyDays} rainy days, ` +
+      `Heavy rain: ${rainyDaysResult.hasHeavyRain ? 'Yes' : 'No'}`
+    );
+  }
+
+  // 10. Weather Curse
+  const weatherCurseResult = calculateWeatherCurse(destination);
+  destination._weatherCurseData = weatherCurseResult;
+  
+  if (weatherCurseResult.shouldAward) {
+    badges.push(DestinationBadge.WEATHER_CURSE);
+    console.log(
+      `⚠️ ${destination.name}: Weather Curse! ` +
+      `TODAY: ${weatherCurseResult.todayTemp}°C, ${weatherCurseResult.todayCondition} → ` +
+      `FUTURE: ${weatherCurseResult.futureTempMin}°C, ${weatherCurseResult.futureCondition} (-${weatherCurseResult.tempLoss}°C loss!)`
     );
   }
 

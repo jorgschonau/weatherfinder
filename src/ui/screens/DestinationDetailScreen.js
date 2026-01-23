@@ -102,6 +102,8 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             convertedForecast._weatherMiracleData = destination._weatherMiracleData;
             convertedForecast._heatwaveData = destination._heatwaveData;
             convertedForecast._snowKingData = destination._snowKingData;
+            convertedForecast._rainyDaysData = destination._rainyDaysData;
+            convertedForecast._weatherCurseData = destination._weatherCurseData;
           }
           
           setForecast(convertedForecast);
@@ -163,6 +165,9 @@ const DestinationDetailScreen = ({ route, navigation }) => {
 
   const handleDriveThere = async () => {
     try {
+      // TODO: Add motor sound (real audio, not haptics) when starting navigation
+      // Requires: expo-av Audio.Sound with engine.mp3/wav file
+      
       await openInMaps(destination, NavigationProvider.AUTO);
     } catch (error) {
       Alert.alert(
@@ -310,6 +315,8 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               const miracleData = destination._weatherMiracleData;
               const heatwaveData = destination._heatwaveData;
               const snowKingData = destination._snowKingData;
+              const rainyDaysData = destination._rainyDaysData;
+              const weatherCurseData = destination._weatherCurseData;
               
               // Determine which badge type
               const isWorthTheDrive = badge === 'WORTH_THE_DRIVE';
@@ -320,6 +327,8 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               const isWeatherMiracle = badge === 'WEATHER_MIRACLE';
               const isHeatwave = badge === 'HEATWAVE';
               const isSnowKing = badge === 'SNOW_KING';
+              const isRainyDays = badge === 'RAINY_DAYS';
+              const isWeatherCurse = badge === 'WEATHER_CURSE';
               
               // Animated Badge Card
               const AnimatedBadgeCard = () => {
@@ -497,6 +506,30 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                           </Text>
                           <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Ø {snowKingData.avgTemp}°C
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {/* Rainy Days stats */}
+                      {isRainyDays && rainyDaysData && (
+                        <View style={styles.badgeStats}>
+                          <Text style={[styles.badgeStat, { color: theme.primary }]}>
+                            🌧️ {rainyDaysData.rainyDays} Regentage
+                          </Text>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
+                            💧 Starkregen: {rainyDaysData.hasHeavyRain ? 'Ja' : 'Nein'}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {/* Weather Curse stats */}
+                      {isWeatherCurse && weatherCurseData && (
+                        <View style={styles.badgeStats}>
+                          <Text style={[styles.badgeStat, { color: '#4CAF50' }]}>
+                            ☀️ Heute: {weatherCurseData.todayTemp}°C, {weatherCurseData.todayCondition}
+                          </Text>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
+                            ⚠️ Bald: {weatherCurseData.futureTempMin}°C, {weatherCurseData.futureCondition} (-{weatherCurseData.tempLoss}°C!)
                           </Text>
                         </View>
                       )}

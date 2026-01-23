@@ -35,6 +35,16 @@ export const playSuccessHaptic = async () => {
 };
 
 /**
+ * TODO: Play a motor/engine sound effect
+ * Requires: Real audio file (engine.mp3/wav) using expo-av Audio.Sound
+ * NOTE: Don't use haptic feedback - user wants real sound or nothing!
+ */
+export const playMotorSound = async () => {
+  // Disabled for now - needs real audio implementation
+  // User feedback: "keine haptic scheisse! das nervt nur!"
+};
+
+/**
  * Cleanup sound resources
  */
 export const cleanupSound = async () => {
