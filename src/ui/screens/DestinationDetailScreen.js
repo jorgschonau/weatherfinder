@@ -206,12 +206,67 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     return null;
   }
 
+  // Translate weather condition
+  const translateCondition = (description) => {
+    if (!description) return '';
+    const desc = description.toLowerCase();
+    
+    // Map English conditions to translation keys
+    if (desc.includes('clear')) return t('weather.conditions.clearSky');
+    if (desc.includes('few clouds')) return t('weather.conditions.fewClouds');
+    if (desc.includes('scattered clouds')) return t('weather.conditions.scatteredClouds');
+    if (desc.includes('broken clouds')) return t('weather.conditions.brokenClouds');
+    if (desc.includes('overcast')) return t('weather.conditions.overcastClouds');
+    if (desc.includes('light rain') || desc.includes('slight rain')) return t('weather.conditions.lightRain');
+    if (desc.includes('moderate rain')) return t('weather.conditions.moderateRain');
+    if (desc.includes('heavy rain') || desc.includes('intense rain')) return t('weather.conditions.heavyRain');
+    if (desc.includes('light snow') || desc.includes('slight snow')) return t('weather.conditions.lightSnow');
+    if (desc.includes('moderate snow')) return t('weather.conditions.moderateSnow');
+    if (desc.includes('heavy snow') || desc.includes('intense snow')) return t('weather.conditions.heavySnow');
+    if (desc.includes('sleet')) return t('weather.conditions.sleet');
+    if (desc.includes('drizzle')) return t('weather.conditions.drizzle');
+    if (desc.includes('thunderstorm') || desc.includes('thunder')) return t('weather.conditions.thunderstorm');
+    if (desc.includes('mist')) return t('weather.conditions.mist');
+    if (desc.includes('fog')) return t('weather.conditions.fog');
+    
+    // Fallback to original if no match
+    return description;
+  };
+
+  // Calculate sunshine hours from condition
+  const getSunshineHours = () => {
+    const condition = forecast.condition?.toLowerCase() || '';
+    if (condition.includes('clear') || condition.includes('sunny')) return '8-10';
+    if (condition.includes('partly') || condition.includes('few clouds')) return '6-8';
+    if (condition.includes('cloud')) return '4-6';
+    if (condition.includes('rain') || condition.includes('storm')) return '2-4';
+    return '6-8';
+  };
+
+  // Check if we need dark text (for cold/light backgrounds like snow)
+  const needsDarkText = () => {
+    const condition = forecast.condition?.toLowerCase() || '';
+    return condition.includes('snow') || condition.includes('ice') || condition.includes('freezing');
+  };
+
+  const useDarkText = needsDarkText();
+  const textColor = useDarkText ? '#2b3e50' : '#fff';
+  const subtitleColor = useDarkText ? '#4a5f6d' : 'rgba(255,255,255,0.9)';
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { backgroundColor: getWeatherColor(forecast.condition) }]}>
-        <Text style={styles.headerIcon}>{getWeatherIcon(forecast.condition)}</Text>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>{forecast.name}</Text>
-        <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>{forecast.description}</Text>
+        {/* Großes Hintergrund-Icon */}
+        <Text style={styles.headerBgIcon}>{getWeatherIcon(forecast.condition)}</Text>
+        
+        {/* Obere Zeile: Name & Temperatur */}
+        <View style={styles.headerTop}>
+          <Text style={[styles.headerTitle, { color: textColor }]} numberOfLines={2}>{forecast.name}</Text>
+          <Text style={[styles.headerTemp, { color: textColor }]}>{Math.round(forecast.temperature)}°</Text>
+        </View>
+        
+        {/* Untere Zeile: Description */}
+        <Text style={[styles.headerSubtitle, { color: subtitleColor }]}>{translateCondition(forecast.description)}</Text>
       </View>
 
       <View style={styles.content}>
@@ -219,14 +274,10 @@ const DestinationDetailScreen = ({ route, navigation }) => {
           backgroundColor: theme.surface,
           shadowColor: theme.shadow
         }]}>
-          <View style={styles.tempContainer}>
-            <Text style={[styles.tempValue, { color: theme.primary }]}>{Math.round(forecast.temperature)}°</Text>
-            <Text style={[styles.tempUnit, { color: theme.textSecondary }]}>C</Text>
-          </View>
           <View style={[styles.statsContainer, { borderTopColor: theme.border }]}>
             <View style={styles.statItem}>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{t('destination.stability')}</Text>
-              <Text style={[styles.statValue, { color: theme.text }]}>{forecast.stability || 0}%</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Sonne</Text>
+              <Text style={[styles.statValue, { color: theme.text }]}>{getSunshineHours()} Std</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{t('destination.humidity')}</Text>
@@ -331,7 +382,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {/* Worth the Drive stats */}
                       {isWorthTheDrive && worthData && (
                         <View style={styles.badgeStats}>
-                          <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Temperatur: {worthData.tempOrigin}°C → {worthData.tempDest}°C (+{worthData.tempDelta}°C)
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
@@ -349,7 +400,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {/* Worth the Drive Budget stats */}
                       {isWorthTheDriveBudget && worthBudgetData && (
                         <View style={styles.badgeStats}>
-                          <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Temperatur: {worthBudgetData.tempOrigin}°C → {worthBudgetData.tempDest}°C (+{worthBudgetData.tempDelta}°C)
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
@@ -367,7 +418,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {/* Warm & Dry stats */}
                       {isWarmAndDry && warmDryData && (
                         <View style={styles.badgeStats}>
-                          <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Temperatur: {warmDryData.temp}°C (Rang #{warmDryData.tempRank})
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
@@ -382,7 +433,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {/* Beach Paradise stats */}
                       {isBeachParadise && beachData && (
                         <View style={styles.badgeStats}>
-                          <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Temperatur: {beachData.temp}°C
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
@@ -409,7 +460,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {/* Weather Miracle stats */}
                       {isWeatherMiracle && miracleData && (
                         <View style={styles.badgeStats}>
-                          <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Temperatur: {miracleData.tempOrigin}°C → {miracleData.tempDest}°C (+{miracleData.tempDelta}°C)
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
@@ -427,7 +478,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                           <Text style={[styles.badgeStat, { color: metadata.color }]}>
                             🔥 {heatwaveData.days} Tage Hitzewelle
                           </Text>
-                          <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Ø {heatwaveData.avgTemp}°C (Max {heatwaveData.maxTemp}°C)
                           </Text>
                         </View>
@@ -442,7 +493,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
                             📊 {snowKingData.totalSnowfall} cm Gesamtschneefall
                           </Text>
-                          <Text style={[styles.badgeStat, { color: '#FF6B35' }]}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Ø {snowKingData.avgTemp}°C
                           </Text>
                         </View>
@@ -565,8 +616,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   header: {
-    padding: 30,
-    alignItems: 'center',
+    padding: 24,
+    paddingTop: 32,
+    paddingBottom: 32,
+    position: 'relative',
+    overflow: 'hidden',
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     shadowColor: '#000',
@@ -575,17 +629,38 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  headerIcon: {
-    fontSize: 64,
-    marginBottom: 10,
+  headerBgIcon: {
+    position: 'absolute',
+    fontSize: 110,
+    top: '55%',
+    left: '56%',
+    transform: [{ translateX: -55 }, { translateY: -55 }],
+    opacity: 0.4,
+    textShadowColor: 'rgba(255, 255, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 15,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+    zIndex: 1,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 5,
+    fontSize: 32,
+    fontWeight: '700',
+    maxWidth: '65%',
+    flexShrink: 1,
+  },
+  headerTemp: {
+    fontSize: 64,
+    fontWeight: '300',
+    letterSpacing: -2,
   },
   headerSubtitle: {
     fontSize: 16,
+    zIndex: 1,
   },
   content: {
     padding: 20,
@@ -599,25 +674,10 @@ const styles = StyleSheet.create({
     shadowRadius: 2.22,
     elevation: 3,
   },
-  tempContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  tempValue: {
-    fontSize: 64,
-    fontWeight: 'bold',
-  },
-  tempUnit: {
-    fontSize: 24,
-    marginTop: 10,
-  },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    borderTopWidth: 1,
-    paddingTop: 20,
+    paddingTop: 0,
   },
   statItem: {
     alignItems: 'center',
@@ -704,15 +764,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   forecastIcon: {
-    fontSize: 32,
-    marginHorizontal: 15,
+    fontSize: 40,
+    width: 60,
+    textAlign: 'center',
+    marginHorizontal: 16,
   },
   forecastTemp: {
     fontSize: 16,
     fontWeight: '500',
+    minWidth: 80,
   },
   actionsContainer: {
     gap: 12,
+    marginTop: 24,
     marginBottom: 30,
   },
   favouriteButton: {
