@@ -25,36 +25,36 @@ export const BadgeMetadata = {
   [DestinationBadge.WORTH_THE_DRIVE]: {
     icon: '🚗',
     color: '#FFD700', // Gold
-    priority: 2,
-  },
-  [DestinationBadge.HEATWAVE]: {
-    icon: '🔥',
-    color: '#FF5722', // Red/Orange
-    priority: 3,
-  },
-  [DestinationBadge.WEATHER_MIRACLE]: {
-    icon: '🌈',
-    color: '#E91E63', // Pink (dramatic!)
-    priority: 4,
-  },
-  [DestinationBadge.SUNNY_STREAK]: {
-    icon: '☀️',
-    color: '#FFA726', // Orange (sunny!)
-    priority: 5,
-  },
-  [DestinationBadge.BEACH_PARADISE]: {
-    icon: '🌊',
-    color: '#00BCD4', // Cyan/Turquoise
-    priority: 5,
-  },
-  [DestinationBadge.SNOW_KING]: {
-    icon: '⛄',
-    color: '#2196F3', // Blue (winter cold)
-    priority: 6,
+    priority: 1, // Same as Budget (mutually exclusive)
   },
   [DestinationBadge.WARM_AND_DRY]: {
     icon: '☀️',
     color: '#FF6B35', // Orange-red
+    priority: 2,
+  },
+  [DestinationBadge.BEACH_PARADISE]: {
+    icon: '🌊',
+    color: '#00BCD4', // Cyan/Turquoise
+    priority: 3,
+  },
+  [DestinationBadge.HEATWAVE]: {
+    icon: '🔥',
+    color: '#FF5722', // Red/Orange
+    priority: 4,
+  },
+  [DestinationBadge.WEATHER_MIRACLE]: {
+    icon: '🌈',
+    color: '#E91E63', // Pink (dramatic!)
+    priority: 5,
+  },
+  [DestinationBadge.SUNNY_STREAK]: {
+    icon: '☀️',
+    color: '#FFA726', // Orange (sunny!)
+    priority: 6,
+  },
+  [DestinationBadge.SNOW_KING]: {
+    icon: '⛄',
+    color: '#2196F3', // Blue (winter cold)
     priority: 7,
   },
 };
@@ -246,15 +246,17 @@ export function calculateWarmAndDry(destination, allDestinations) {
   const temp = destination.temperature ?? 0;
   const condition = destination.condition ?? 'unknown';
   const windSpeed = destination.windSpeed ?? 0;
+  const precipitation = destination.precipitation ?? 0; // Precipitation probability (0-100%)
   
-  // Criteria
-  const MIN_TEMP = 12; // Must be at least comfortably warm
-  const MAX_WIND = 20; // Max wind speed in km/h (light breeze)
+  // Criteria (Updated)
+  const MIN_TEMP = 18; // Must be at least 18°C (pleasantly warm)
+  const MAX_WIND = 30; // Max wind speed in km/h
+  const MAX_PRECIPITATION = 30; // Max 30% precipitation probability
   const BAD_CONDITIONS = ['rainy', 'snowy']; // Conditions that disqualify
   
   // Check conditions
   const isWarm = temp >= MIN_TEMP;
-  const isDry = !BAD_CONDITIONS.includes(condition);
+  const isDry = !BAD_CONDITIONS.includes(condition) && precipitation < MAX_PRECIPITATION;
   const isCalm = windSpeed <= MAX_WIND;
   
   // Rank by temperature among all destinations (for display purposes)
@@ -292,11 +294,11 @@ export function calculateBeachParadise(destination) {
   const condition = destination.condition ?? 'unknown';
   const windSpeed = destination.windSpeed ?? 0;
   
-  // Perfect beach criteria
-  const MIN_TEMP = 22; // Beach-perfect temperature
-  const MAX_TEMP = 32; // Not too hot
+  // Perfect beach criteria (Updated)
+  const MIN_TEMP = 20; // Realistic beach temperature
+  const MAX_TEMP = 35; // Still comfortable for beach
   const GOOD_CONDITIONS = ['sunny', 'cloudy']; // Dry weather
-  const MAX_WIND = 15; // Light breeze only
+  const MAX_WIND = 25; // Light to moderate breeze (normal at beach)
   
   const shouldAward = (
     temp >= MIN_TEMP &&
@@ -436,6 +438,21 @@ export function calculateHeatwave(destination) {
 export function calculateSnowKing(destination) {
   const currentCondition = destination.condition ?? 'unknown';
   const currentTemp = destination.temperature ?? 0;
+  const population = destination.population ?? 0;
+  
+  // Exclude large cities (over 200k population) - skiing is for mountain villages!
+  const MAX_POPULATION = 200000;
+  if (population > MAX_POPULATION) {
+    return {
+      shouldAward: false,
+      snowDays: 0,
+      snowfallAmount: 0,
+      maxTemp: currentTemp,
+      minTemp: currentTemp,
+      avgTemp: currentTemp,
+      reason: `City too large (${population.toLocaleString()} population) - Snow King is for ski resorts!`,
+    };
+  }
   
   // Snowfall amount (mm)
   const snowfall1h = destination.snowfall1h || 0;

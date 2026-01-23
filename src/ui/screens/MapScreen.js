@@ -25,6 +25,26 @@ import AnimatedBadge from '../components/AnimatedBadge';
 import { SkeletonMapMarker } from '../components/SkeletonLoader';
 // import MapSearchBar from '../components/MapSearchBar'; // TODO: Component doesn't exist yet
 
+// Custom map style to hide POI Business and Transit
+const customMapStyle = [
+  {
+    featureType: 'poi.business',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    featureType: 'transit',
+    stylers: [{ visibility: 'off' }],
+  },
+];
+
+// Map boundaries - restrict visible area
+const MAP_BOUNDS = {
+  north: 75,   // Spitzbergen + Puffer
+  south: 15,   // Südlich von Mexico City + Puffer
+  west: -175,  // Alaska + Pazifik-Inseln
+  east: 50     // Östlich Ural + Puffer
+};
+
 const MapScreen = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
@@ -37,6 +57,7 @@ const MapScreen = ({ navigation }) => {
   const [allLoadedDestinations, setAllLoadedDestinations] = useState([]); // ALL destinations from DB (cached)
   const [isFilteringMarkers, setIsFilteringMarkers] = useState(false); // Loading state for filtering
   const zoomDebounceTimer = useRef(null); // Debounce timer for zoom
+  const radiusDebounceTimer = useRef(null); // Debounce timer for radius changes
   const [radius, setRadius] = useState(500); // Default 500km
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +68,9 @@ const MapScreen = ({ navigation }) => {
   const [showMockData, setShowMockData] = useState(true); // Toggle for mock data (temp for testing)
   const [showOnlyBadges, setShowOnlyBadges] = useState(false); // Toggle to show only destinations with badges
   const [showRadiusMenu, setShowRadiusMenu] = useState(false); // Dropdown for radius selection
+  const [reverseMode, setReverseMode] = useState('warm'); // 'warm' or 'cold' - which places to reward
+  const [radiusShape, setRadiusShape] = useState('circle'); // 'circle', 'half', 'semi' - radius shape
+  const [currentRegion, setCurrentRegion] = useState(null); // Track current map region
   // const [warnings, setWarnings] = useState([]); // Weather warnings - DISABLED
   // const [showWarnings, setShowWarnings] = useState(true); // Toggle for warnings display - DISABLED
   // const [showSearch, setShowSearch] = useState(false); // Toggle search bar - DISABLED (MapSearchBar component missing)
@@ -108,18 +132,34 @@ const MapScreen = ({ navigation }) => {
   useEffect(() => {
     if (location) {
       console.log('🔄 Trigger: location/radius/condition/centerPoint/centerPointWeather changed, reloading destinations...');
-      loadDestinations();
-      // Adjust map region when radius changes
+      
+      // Debounce radius changes to prevent rapid re-fetching
+      if (radiusDebounceTimer.current) {
+        clearTimeout(radiusDebounceTimer.current);
+      }
+      
+      radiusDebounceTimer.current = setTimeout(() => {
+        loadDestinations();
+      }, 500); // Wait 500ms after last radius change
+      
+      // Adjust map region immediately (no debounce for visual feedback)
       const effectiveCenter = centerPoint || location;
       if (mapRef.current && effectiveCenter) {
         mapRef.current.animateToRegion({
           latitude: effectiveCenter.latitude,
           longitude: effectiveCenter.longitude,
           latitudeDelta: (radius * 2) / 111,
-          longitudeDelta: (radius * 2) / (111 * Math.cos(effectiveCenter.latitude * Math.PI / 180)),
+          longitudeDelta: (radius * 2) / (111* Math.cos(effectiveCenter.latitude * Math.PI / 180)),
         }, 600); // Langsamere Animation (600ms statt 500ms)
       }
     }
+    
+    // Cleanup timer on unmount
+    return () => {
+      if (radiusDebounceTimer.current) {
+        clearTimeout(radiusDebounceTimer.current);
+      }
+    };
   }, [location, radius, selectedCondition, centerPoint, centerPointWeather]);
 
   // Update filtered destinations based on zoom level with DEBOUNCE for performance
@@ -324,21 +364,24 @@ const MapScreen = ({ navigation }) => {
   };
 
   const handleRadiusIncrease = async () => {
-    const newRadius = radius + 50;
-    setRadius(Math.min(newRadius, 5000)); // Max 5000 km
+    const newRadius = Math.min(radius + 50, 5000); // Max 5000 km
+    setRadius(newRadius);
     await playDingSound(); // Play ding sound on interaction
+    // Note: loadDestinations is debounced in useEffect (500ms delay)
   };
 
   const handleRadiusDecrease = async () => {
-    const newRadius = radius - 50;
-    setRadius(Math.max(newRadius, 50)); // Min 50 km
+    const newRadius = Math.max(radius - 50, 50); // Min 50 km
+    setRadius(newRadius);
     await playDingSound(); // Play ding sound on interaction
+    // Note: loadDestinations is debounced in useEffect (500ms delay)
   };
 
   const handleRadiusSelect = async (newRadius) => {
     setRadius(newRadius);
     setShowRadiusMenu(false);
     await playDingSound(); // Play ding sound on interaction
+    // Note: loadDestinations is debounced in useEffect (500ms delay)
   };
 
   const handleCloseOnboarding = async () => {
@@ -401,6 +444,21 @@ const MapScreen = ({ navigation }) => {
 
   const getMapTypeLabel = () => {
     return t(`mapType.${mapType}`, { defaultValue: t('mapType.standard') });
+  };
+
+  const toggleReverseMode = async () => {
+    setReverseMode(prev => prev === 'warm' ? 'cold' : 'warm');
+    await playTickSound();
+    // TODO: Implement badge calculation reversal (cold places get rewards)
+  };
+
+  const toggleRadiusShape = async () => {
+    const shapes = ['circle', 'half', 'semi'];
+    const currentIndex = shapes.indexOf(radiusShape);
+    const nextIndex = (currentIndex + 1) % shapes.length;
+    setRadiusShape(shapes[nextIndex]);
+    await playTickSound();
+    // TODO: Implement radius shape filtering
   };
 
   /**
@@ -717,13 +775,47 @@ const MapScreen = ({ navigation }) => {
   };
 
   /**
-   * Track map region changes to determine zoom level
+   * Track map region changes to determine zoom level + enforce boundaries
    */
   const handleRegionChangeComplete = (region) => {
     // Estimate zoom level from latitudeDelta
     // Zoom ~= log2(360 / latitudeDelta)
     const zoom = Math.round(Math.log2(360 / region.latitudeDelta));
     setCurrentZoom(Math.max(1, Math.min(20, zoom)));
+    
+    // Enforce map boundaries
+    const { latitude, longitude } = region;
+    let needsAdjustment = false;
+    let newLatitude = latitude;
+    let newLongitude = longitude;
+    
+    if (latitude > MAP_BOUNDS.north) {
+      newLatitude = MAP_BOUNDS.north;
+      needsAdjustment = true;
+    } else if (latitude < MAP_BOUNDS.south) {
+      newLatitude = MAP_BOUNDS.south;
+      needsAdjustment = true;
+    }
+    
+    if (longitude > MAP_BOUNDS.east) {
+      newLongitude = MAP_BOUNDS.east;
+      needsAdjustment = true;
+    } else if (longitude < MAP_BOUNDS.west) {
+      newLongitude = MAP_BOUNDS.west;
+      needsAdjustment = true;
+    }
+    
+    // If out of bounds, animate back to valid region
+    if (needsAdjustment && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: newLatitude,
+        longitude: newLongitude,
+        latitudeDelta: region.latitudeDelta,
+        longitudeDelta: region.longitudeDelta,
+      }, 300);
+    }
+    
+    setCurrentRegion(region);
   };
 
   if (loading && !location) {
@@ -762,6 +854,7 @@ const MapScreen = ({ navigation }) => {
         ref={mapRef}
         style={styles.map}
         mapType={mapType}
+        customMapStyle={customMapStyle}
         initialRegion={{
           latitude: location.latitude,
           longitude: location.longitude,
@@ -771,6 +864,8 @@ const MapScreen = ({ navigation }) => {
         }}
         minZoomLevel={getZoomLimits().minZoom}  // Dynamic based on radius!
         maxZoomLevel={getZoomLimits().maxZoom}  // Always 15 (prevent street level)
+        pitchEnabled={false}  // Disable tilt/3D view
+        rotateEnabled={false}  // Disable rotation
         showsUserLocation
         showsMyLocationButton
         onLongPress={handleMapLongPress}
@@ -1108,19 +1203,44 @@ const MapScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <TouchableOpacity
-        style={[styles.mapTypeButton, {
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
-          shadowColor: theme.shadow
-        }]}
-        onPress={toggleMapType}
-        accessibilityLabel={`Map type: ${getMapTypeLabel()}`}
-        accessibilityRole="button"
-        accessibilityHint="Change map display style"
-      >
-        <Text style={[styles.mapTypeIcon, { color: theme.text }]}>⧉</Text>
-      </TouchableOpacity>
+      {/* Bottom Left Buttons Container */}
+      <View style={styles.bottomLeftButtons}>
+        {/* Reverse Mode Button (Warm/Cold) */}
+        <TouchableOpacity
+          style={[styles.reverseButton, {
+            backgroundColor: reverseMode === 'warm' ? '#FF6B35' : '#2196F3',
+            borderColor: '#fff',
+            shadowColor: theme.shadow
+          }]}
+          onPress={toggleReverseMode}
+          accessibilityLabel={`Reverse mode: ${reverseMode}`}
+          accessibilityRole="button"
+          accessibilityHint="Toggle between rewarding warm or cold places"
+        >
+          <Text style={styles.reverseIcon}>🌡️</Text>
+        </TouchableOpacity>
+
+        {/* Radius Shape Button */}
+        <TouchableOpacity
+          style={[styles.radiusShapeButton, {
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            shadowColor: theme.shadow
+          }]}
+          onPress={toggleRadiusShape}
+          onLongPress={() => {
+            playTickSound();
+            // TODO: Implement rotation on long press
+          }}
+          accessibilityLabel={`Radius shape: ${radiusShape}`}
+          accessibilityRole="button"
+          accessibilityHint="Tap to change shape, long press to rotate"
+        >
+          <Text style={[styles.radiusShapeIcon, { color: theme.text }]}>
+            {radiusShape === 'circle' ? '⭕' : radiusShape === 'half' ? '◐' : '◔'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {loading && (
         <View style={styles.loadingOverlay}>
@@ -1424,25 +1544,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  mapTypeButton: {
+  bottomLeftButtons: {
     position: 'absolute',
     bottom: 50,
     left: 20,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  reverseButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    shadowOffset: { width: 0, height: 4 },
+    borderWidth: 2,
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
-    elevation: 8,
+    elevation: 6,
   },
-  mapTypeIcon: {
-    fontSize: 36,
-    textAlign: 'center',
-    marginTop: 4,
+  reverseIcon: {
+    fontSize: 26,
+  },
+  radiusShapeButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  radiusShapeIcon: {
+    fontSize: 28,
   },
   favouritesButton: {
     position: 'absolute',

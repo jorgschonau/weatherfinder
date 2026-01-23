@@ -298,7 +298,9 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             borderColor: theme.border
           }]}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>🏆 Auszeichnungen</Text>
-            {destination.badges.map((badge, index) => {
+            {destination.badges
+              .sort((a, b) => (BadgeMetadata[a]?.priority || 99) - (BadgeMetadata[b]?.priority || 99)) // Sort by priority
+              .map((badge, index) => {
               const metadata = BadgeMetadata[badge];
               const worthData = destination._worthTheDriveData;
               const worthBudgetData = destination._worthTheDriveBudgetData;
