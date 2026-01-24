@@ -104,6 +104,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             convertedForecast._snowKingData = destination._snowKingData;
             convertedForecast._rainyDaysData = destination._rainyDaysData;
             convertedForecast._weatherCurseData = destination._weatherCurseData;
+            convertedForecast._springAwakeningData = destination._springAwakeningData;
           }
           
           setForecast(convertedForecast);
@@ -211,10 +212,39 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     return null;
   }
 
+  // Convert old "Weather code XX" to proper description (for legacy DB data)
+  const fixWeatherCodeDescription = (description) => {
+    if (!description) return '';
+    
+    // Check for "Weather code XX" pattern
+    const match = description.match(/Weather code (\d+)/i);
+    if (match) {
+      const code = parseInt(match[1]);
+      const codeDescriptions = {
+        0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+        45: 'Foggy', 48: 'Depositing rime fog',
+        51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
+        56: 'Light freezing drizzle', 57: 'Dense freezing drizzle',
+        61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
+        66: 'Light freezing rain', 67: 'Heavy freezing rain',
+        71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow', 77: 'Snow grains',
+        80: 'Slight rain showers', 81: 'Moderate rain showers', 82: 'Violent rain showers',
+        85: 'Slight snow showers', 86: 'Heavy snow showers',
+        95: 'Thunderstorm', 96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail',
+      };
+      return codeDescriptions[code] || description;
+    }
+    
+    return description;
+  };
+
   // Translate weather condition
   const translateCondition = (description) => {
     if (!description) return '';
-    const desc = description.toLowerCase();
+    
+    // First, fix any legacy "Weather code XX" entries
+    const fixedDesc = fixWeatherCodeDescription(description);
+    const desc = fixedDesc.toLowerCase();
     
     // Map English conditions to translation keys
     if (desc.includes('clear')) return t('weather.conditions.clearSky');
@@ -225,17 +255,19 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     if (desc.includes('light rain') || desc.includes('slight rain')) return t('weather.conditions.lightRain');
     if (desc.includes('moderate rain')) return t('weather.conditions.moderateRain');
     if (desc.includes('heavy rain') || desc.includes('intense rain')) return t('weather.conditions.heavyRain');
+    if (desc.includes('rain showers')) return t('weather.conditions.lightRain'); // Rain showers
     if (desc.includes('light snow') || desc.includes('slight snow')) return t('weather.conditions.lightSnow');
     if (desc.includes('moderate snow')) return t('weather.conditions.moderateSnow');
     if (desc.includes('heavy snow') || desc.includes('intense snow')) return t('weather.conditions.heavySnow');
+    if (desc.includes('snow showers')) return t('weather.conditions.lightSnow'); // Snow showers
     if (desc.includes('sleet')) return t('weather.conditions.sleet');
     if (desc.includes('drizzle')) return t('weather.conditions.drizzle');
     if (desc.includes('thunderstorm') || desc.includes('thunder')) return t('weather.conditions.thunderstorm');
     if (desc.includes('mist')) return t('weather.conditions.mist');
     if (desc.includes('fog')) return t('weather.conditions.fog');
     
-    // Fallback to original if no match
-    return description;
+    // Fallback to fixed description if no translation match
+    return fixedDesc;
   };
 
   // Calculate sunshine hours from condition
@@ -317,6 +349,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               const snowKingData = destination._snowKingData;
               const rainyDaysData = destination._rainyDaysData;
               const weatherCurseData = destination._weatherCurseData;
+              const springAwakeningData = destination._springAwakeningData;
               
               // Determine which badge type
               const isWorthTheDrive = badge === 'WORTH_THE_DRIVE';
@@ -329,6 +362,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               const isSnowKing = badge === 'SNOW_KING';
               const isRainyDays = badge === 'RAINY_DAYS';
               const isWeatherCurse = badge === 'WEATHER_CURSE';
+              const isSpringAwakening = badge === 'SPRING_AWAKENING';
               
               // Animated Badge Card
               const AnimatedBadgeCard = () => {
@@ -530,6 +564,18 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                           </Text>
                           <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             ⚠️ Bald: {weatherCurseData.futureTempMin}°C, {weatherCurseData.futureCondition} (-{weatherCurseData.tempLoss}°C!)
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {/* Spring Awakening stats */}
+                      {isSpringAwakening && springAwakeningData && (
+                        <View style={styles.badgeStats}>
+                          <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
+                            🌡️ Temperatur: {springAwakeningData.tempOrigin}°C → {springAwakeningData.tempDest}°C (+{springAwakeningData.tempDelta}°C)
+                          </Text>
+                          <Text style={[styles.badgeStat, { color: theme.primary }]}>
+                            💨 ETA: {springAwakeningData.eta}h ({Math.round(springAwakeningData.distance)}km)
                           </Text>
                         </View>
                       )}

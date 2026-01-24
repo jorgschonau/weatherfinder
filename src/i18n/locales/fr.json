@@ -85,10 +85,18 @@
     "units": "Unités",
     "distanceUnit": "Distance",
     "temperatureUnit": "Température",
+    "windSpeedUnit": "Vitesse du vent",
+    "precipitationUnit": "Précipitation",
     "kilometers": "Kilomètres (km)",
     "miles": "Miles (mi)",
     "celsius": "Celsius (°C)",
-    "fahrenheit": "Fahrenheit (°F)"
+    "fahrenheit": "Fahrenheit (°F)",
+    "kmh": "km/h",
+    "mph": "mph",
+    "ms": "m/s",
+    "beaufort": "Beaufort (Bft)",
+    "millimeters": "Millimètres (mm)",
+    "inches": "Pouces (in)"
   },
   "onboarding": {
     "welcome": "Bienvenue!",
@@ -129,7 +137,9 @@
     "rainydays": "Jours Pluvieux",
     "rainydaysDescription": "3+ jours de pluie avec au moins 1 forte pluie",
     "weathercurse": "Malédiction Météo",
-    "weathercurseDescription": "Bon maintenant mais va devenir mauvais & plus froid (-5°C)"
+    "weathercurseDescription": "Bon maintenant mais va devenir mauvais & plus froid (-5°C)",
+    "springawakening": "Réveil du Printemps",
+    "springawakeningDescription": "Printemps pur: doux, ensoleillé & parfait pour découvrir"
   },
   "warnings": {
     "title": "Alertes Météo",

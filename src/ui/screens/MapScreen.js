@@ -925,6 +925,8 @@ const MapScreen = ({ navigation }) => {
                   ? Math.round(dest.temperature) 
                   : '?'}°
               </Text>
+              
+              {/* Stability arrows DISABLED - too complicated for users
               <View style={[
                 styles.stabilityBadge, 
                 dest.isCurrentLocation && styles.currentLocationBadge,
@@ -932,6 +934,7 @@ const MapScreen = ({ navigation }) => {
               ]}>
                 <Text style={styles.stabilityText}>{getStabilitySymbol(dest)}</Text>
               </View>
+              */}
               
               {/* Badge overlays (stacked vertically on right side) with animations */}
               {dest.badges && dest.badges.length > 0 && (

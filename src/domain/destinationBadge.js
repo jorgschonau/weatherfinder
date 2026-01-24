@@ -13,6 +13,7 @@ export const DestinationBadge = {
   SNOW_KING: 'SNOW_KING', // Reliable snow conditions - perfect for skiing
   RAINY_DAYS: 'RAINY_DAYS', // 3+ rainy days with at least 1 heavy rain
   WEATHER_CURSE: 'WEATHER_CURSE', // Good weather now but will turn bad soon
+  SPRING_AWAKENING: 'SPRING_AWAKENING', // Perfect spring weather (March 1 - May 15)
 };
 
 /**
@@ -68,6 +69,11 @@ export const BadgeMetadata = {
     icon: '⛈️',
     color: '#37474F', // Dark gray (storm cloud)
     priority: 9,
+  },
+  [DestinationBadge.SPRING_AWAKENING]: {
+    icon: '🐇', // Bunny for spring
+    color: '#7ED957', // Fresh spring green
+    priority: 10,
   },
 };
 
@@ -658,6 +664,80 @@ export function calculateWeatherCurse(destination) {
 }
 
 /**
+ * Calculate "Spring Awakening" eligibility
+ * Perfect spring weather: 15-25°C, sunny/partly cloudy, light wind
+ * Only from March 1 - May 15
+ * 
+ * @param {Object} destination - Destination with weather data
+ * @param {Object} origin - Origin location with weather (for temp delta)
+ * @param {number} distanceKm - Distance from origin
+ * @returns {Object} - { shouldAward, tempDelta, tempDest, tempOrigin, distance, eta }
+ */
+export function calculateSpringAwakening(destination, origin, distanceKm) {
+  const tempDest = destination.temperature ?? 0;
+  const tempOrigin = origin?.temperature ?? 0;
+  const tempDelta = tempDest - tempOrigin;
+  
+  // Normal mode: Check date: March 1 - May 15
+  const now = new Date();
+  const month = now.getMonth(); // 0 = January, 2 = March, 4 = May
+  const day = now.getDate();
+  
+  // Spring period: March 1 (month 2, day 1) to May 15 (month 4, day 15)
+  const isSpringPeriod = (
+    (month === 2) || // March (entire month)
+    (month === 3) || // April (entire month)
+    (month === 4 && day <= 15) // May 1-15
+  );
+  
+  if (!isSpringPeriod) {
+    return { 
+      shouldAward: false, 
+      reason: 'Not spring period (March 1 - May 15)',
+      tempDelta: Math.round(tempDelta),
+      tempDest: Math.round(tempDest),
+      tempOrigin: Math.round(tempOrigin),
+      distance: Math.round(distanceKm),
+      eta: 0,
+      isSpringPeriod: false
+    };
+  }
+  
+  const condition = destination.condition ?? 'unknown';
+  const windSpeed = destination.windSpeed ?? 0;
+  
+  // Temperature: 15-25°C (pleasant to warm, not hot)
+  const MIN_TEMP = 15;
+  const MAX_TEMP = 25;
+  const isGoodTemp = tempDest >= MIN_TEMP && tempDest <= MAX_TEMP;
+  
+  // Condition: Sunny or Partly Cloudy
+  const SPRING_CONDITIONS = ['sunny', 'cloudy'];
+  const isGoodCondition = SPRING_CONDITIONS.includes(condition);
+  
+  // Wind: ≤25 km/h (light breeze)
+  const MAX_WIND = 25;
+  const isLightWind = windSpeed <= MAX_WIND;
+  
+  // All criteria must be met
+  const shouldAward = isGoodTemp && isGoodCondition && isLightWind;
+  const eta = calculateETA(distanceKm);
+  
+  return {
+    shouldAward,
+    tempDelta: Math.round(tempDelta),
+    tempDest: Math.round(tempDest),
+    tempOrigin: Math.round(tempOrigin),
+    distance: Math.round(distanceKm),
+    eta: Math.round(eta * 10) / 10,
+    isSpringPeriod: true,
+    reason: shouldAward 
+      ? 'Perfect spring weather!' 
+      : `Temp: ${isGoodTemp ? '✓' : '✗'}, Condition: ${isGoodCondition ? '✓' : '✗'}, Wind: ${isLightWind ? '✓' : '✗'}`
+  };
+}
+
+/**
  * Calculate badge eligibility for a destination
  * 
  * @param {Object} destination - The destination to evaluate
@@ -792,6 +872,19 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
       `⚠️ ${destination.name}: Weather Curse! ` +
       `TODAY: ${weatherCurseResult.todayTemp}°C, ${weatherCurseResult.todayCondition} → ` +
       `FUTURE: ${weatherCurseResult.futureTempMin}°C, ${weatherCurseResult.futureCondition} (-${weatherCurseResult.tempLoss}°C loss!)`
+    );
+  }
+
+  // 11. Spring Awakening (only March 1 - May 15)
+  const springAwakeningResult = calculateSpringAwakening(destination, userLocation, distanceKm);
+  destination._springAwakeningData = springAwakeningResult;
+  
+  if (springAwakeningResult.shouldAward) {
+    badges.push(DestinationBadge.SPRING_AWAKENING);
+    console.log(
+      `🐇 ${destination.name}: Spring Awakening! ` +
+      `Temp: ${springAwakeningResult.tempOrigin}°C → ${springAwakeningResult.tempDest}°C (+${springAwakeningResult.tempDelta}°C), ` +
+      `ETA: ${springAwakeningResult.eta}h (${springAwakeningResult.distance}km) - ${springAwakeningResult.reason}`
     );
   }
 

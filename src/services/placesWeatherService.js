@@ -7,6 +7,34 @@ import { getCountryName, getCountryFlag } from '../utils/countryNames';
  */
 
 /**
+ * Convert legacy "Weather code XX" to proper description
+ * (for old database entries that weren't updated yet)
+ */
+const fixWeatherCodeDescription = (description) => {
+  if (!description) return '';
+  
+  const match = description.match(/Weather code (\d+)/i);
+  if (match) {
+    const code = parseInt(match[1]);
+    const codeDescriptions = {
+      0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+      45: 'Foggy', 48: 'Depositing rime fog',
+      51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
+      56: 'Light freezing drizzle', 57: 'Dense freezing drizzle',
+      61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
+      66: 'Light freezing rain', 67: 'Heavy freezing rain',
+      71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow', 77: 'Snow grains',
+      80: 'Slight rain showers', 81: 'Moderate rain showers', 82: 'Violent rain showers',
+      85: 'Slight snow showers', 86: 'Heavy snow showers',
+      95: 'Thunderstorm', 96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail',
+    };
+    return codeDescriptions[code] || description;
+  }
+  
+  return description;
+};
+
+/**
  * Get all places with latest weather
  * @param {object} filters - Filtering options
  * @param {number} filters.userLat - User latitude
@@ -479,7 +507,7 @@ function adaptPlaceToDestination(place) {
     // Metadata
     weatherMain: place.weather_main,
     weatherIcon: place.weather_icon,
-    weatherDescription: place.weather_description,
+    weatherDescription: fixWeatherCodeDescription(place.weather_description),
     weatherTimestamp: place.weather_timestamp,
     
     // Weather trend (from DB: improving, stable, worsening)
@@ -555,7 +583,7 @@ function adaptForecastEntry(entry) {
     windSpeed: entry.wind_speed_max || entry.wind_speed ? Math.round(entry.wind_speed_max || entry.wind_speed) : null,
     weatherMain: entry.weather_main,
     weatherIcon: entry.weather_icon,
-    weatherDescription: entry.weather_description,
+    weatherDescription: fixWeatherCodeDescription(entry.weather_description),
   };
 }
 

@@ -4,8 +4,10 @@
 Das Unit System ermöglicht die Konvertierung zwischen:
 - **Distanz**: Kilometer (km) ↔ Meilen (mi)
 - **Temperatur**: Celsius (°C) ↔ Fahrenheit (°F)
+- **Windgeschwindigkeit**: km/h ↔ mph ↔ m/s ↔ Beaufort
+- **Niederschlag**: mm ↔ inches
 
-**Default Einstellungen**: Kilometer und Celsius
+**Default Einstellungen**: Kilometer, Celsius, km/h, mm
 
 ## Setup (Already Done ✅)
 
@@ -38,7 +40,7 @@ import {
 
 ### 2. Get Current Units
 ```javascript
-const { distanceUnit, temperatureUnit } = useUnits();
+const { distanceUnit, temperatureUnit, windSpeedUnit, precipitationUnit } = useUnits();
 ```
 
 ### 3. Format Values for Display
@@ -71,8 +73,14 @@ const distValue = getDistanceValue(destination.distance, distanceUnit);
 
 #### Wind Speed
 ```javascript
-const windDisplay = formatWindSpeed(destination.windSpeed, distanceUnit);
-// Output: "25 km/h" or "16 mph"
+const windDisplay = formatWindSpeed(destination.windSpeed, windSpeedUnit);
+// Output: "25 km/h" or "16 mph" or "6.9 m/s" or "4 Bft"
+```
+
+#### Precipitation
+```javascript
+const precipDisplay = formatPrecipitation(destination.precipitation, precipitationUnit);
+// Output: "5.0 mm" or "0.2 in"
 ```
 
 ### 4. Example: MapScreen Marker
@@ -96,10 +104,15 @@ const MapScreen = () => {
 ```javascript
 // In DestinationDetailScreen.js
 import { useUnits } from '../../contexts/UnitContext';
-import { formatTemperature, formatDistance, formatWindSpeed } from '../../utils/unitConversion';
+import { 
+  formatTemperature, 
+  formatDistance, 
+  formatWindSpeed, 
+  formatPrecipitation 
+} from '../../utils/unitConversion';
 
 const DestinationDetailScreen = () => {
-  const { distanceUnit, temperatureUnit } = useUnits();
+  const { distanceUnit, temperatureUnit, windSpeedUnit, precipitationUnit } = useUnits();
   
   return (
     <View>
@@ -115,7 +128,12 @@ const DestinationDetailScreen = () => {
       
       {/* Wind Speed */}
       <Text>
-        💨 {formatWindSpeed(forecast.windSpeed, distanceUnit)}
+        💨 {formatWindSpeed(forecast.windSpeed, windSpeedUnit)}
+      </Text>
+      
+      {/* Precipitation */}
+      <Text>
+        🌧️ {formatPrecipitation(forecast.precipitation, precipitationUnit)}
       </Text>
       
       {/* Forecast Temps */}
@@ -141,8 +159,12 @@ const SettingsScreen = () => {
   const { 
     distanceUnit, 
     temperatureUnit, 
+    windSpeedUnit,
+    precipitationUnit,
     setDistanceUnit, 
-    setTemperatureUnit 
+    setTemperatureUnit,
+    setWindSpeed,
+    setPrecipitation
   } = useUnits();
   
   return (
@@ -172,6 +194,32 @@ const SettingsScreen = () => {
           <Picker.Item label={t('settings.fahrenheit')} value="fahrenheit" />
         </Picker>
       </View>
+      
+      {/* Wind Speed Unit Picker */}
+      <View>
+        <Text>{t('settings.windSpeedUnit')}</Text>
+        <Picker
+          selectedValue={windSpeedUnit}
+          onValueChange={(value) => setWindSpeed(value)}
+        >
+          <Picker.Item label={t('settings.kmh')} value="kmh" />
+          <Picker.Item label={t('settings.mph')} value="mph" />
+          <Picker.Item label={t('settings.ms')} value="ms" />
+          <Picker.Item label={t('settings.beaufort')} value="beaufort" />
+        </Picker>
+      </View>
+      
+      {/* Precipitation Unit Picker */}
+      <View>
+        <Text>{t('settings.precipitationUnit')}</Text>
+        <Picker
+          selectedValue={precipitationUnit}
+          onValueChange={(value) => setPrecipitation(value)}
+        >
+          <Picker.Item label={t('settings.millimeters')} value="mm" />
+          <Picker.Item label={t('settings.inches')} value="inches" />
+        </Picker>
+      </View>
     </View>
   );
 };
@@ -180,14 +228,32 @@ const SettingsScreen = () => {
 ## Persistence
 - Unit preferences are automatically saved to AsyncStorage
 - Loaded on app startup
-- Default: km + °C
+- Default: km, °C, km/h, mm
 
 ## Backend Data
 **IMPORTANT**: Alle Daten im Backend/Supabase bleiben in:
 - Kilometer (km)
 - Celsius (°C)
+- km/h (Windgeschwindigkeit)
+- mm (Niederschlag)
 
 Die Konvertierung passiert NUR im Frontend für die Anzeige!
+
+## Wind Speed Conversion Reference
+- **km/h**: Standard metric (default)
+- **mph**: Miles per hour (US/UK)
+- **m/s**: Meters per second (scientific)
+- **Beaufort**: Beaufort scale 0-12 (maritime/aviation)
+  - 0: Calm (<1 km/h)
+  - 1-3: Light breeze (1-19 km/h)
+  - 4-6: Moderate to strong breeze (20-49 km/h)
+  - 7-9: Gale to strong gale (50-88 km/h)
+  - 10-12: Storm to hurricane (89+ km/h)
+
+## Precipitation Conversion Reference
+- **mm**: Millimeters (metric, default)
+- **inches**: Inches (imperial, US)
+- Conversion: 1 inch = 25.4 mm
 
 ## Next Steps
 1. ✅ Unit system created (UnitContext, utilities, translations)
