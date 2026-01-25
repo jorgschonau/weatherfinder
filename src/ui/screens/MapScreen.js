@@ -19,6 +19,7 @@ import { BadgeMetadata } from '../../domain/destinationBadge';
 import { playTickSound, playDingSound } from '../../utils/soundUtils';
 // Badges are now calculated in weatherUsecases.js, not here!
 import WeatherFilter from '../components/WeatherFilter';
+import DateFilter from '../components/DateFilter';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 import AnimatedBadge from '../components/AnimatedBadge';
 // import AnimatedMarker from '../components/AnimatedMarker'; // Temporarily disabled
@@ -60,6 +61,7 @@ const MapScreen = ({ navigation }) => {
   const radiusDebounceTimer = useRef(null); // Debounce timer for radius changes
   const [radius, setRadius] = useState(500); // Default 500km
   const [selectedCondition, setSelectedCondition] = useState(null);
+  const [selectedDate, setSelectedDate] = useState('today'); // Date filter (mock for now)
   const [loading, setLoading] = useState(true);
   const [loadingDestinations, setLoadingDestinations] = useState(false);
   const [mapType, setMapType] = useState('standard'); // standard, satellite, hybrid, terrain, mutedStandard
@@ -1127,6 +1129,13 @@ const MapScreen = ({ navigation }) => {
             borderColor: theme.border,
             shadowColor: theme.shadow
           }]}>
+            <DateFilter
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+            />
+            
+            <View style={styles.filterSeparator} />
+            
             <WeatherFilter
               selectedCondition={selectedCondition}
               onConditionChange={setSelectedCondition}
@@ -1306,6 +1315,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  filterSeparator: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 12,
   },
   markerContainer: {
     width: 80,

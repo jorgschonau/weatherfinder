@@ -1,8 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../theme/ThemeProvider';
-import { getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
 
 const WEATHER_CONDITIONS = [
   { value: null, key: 'all', icon: '🌍' },
@@ -14,39 +12,34 @@ const WEATHER_CONDITIONS = [
 
 const WeatherFilter = ({ selectedCondition, onConditionChange }) => {
   const { t } = useTranslation();
-  const { theme } = useTheme();
   
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: theme.text }]}>{t('weather.type')}</Text>
+      <Text style={styles.label}>Wetter</Text>
       <View style={styles.optionsContainer}>
-        {WEATHER_CONDITIONS.map((condition) => (
-          <TouchableOpacity
-            key={condition.value || 'all'}
-            style={[
-              styles.option,
-              { 
-                backgroundColor: theme.background,
-                borderColor: selectedCondition === condition.value ? theme.primary : 'transparent'
-              }
-            ]}
-            onPress={() => onConditionChange(condition.value)}
-          >
-            <Text style={styles.optionIcon}>{condition.icon}</Text>
-            <Text
+        {WEATHER_CONDITIONS.map((condition) => {
+          const isSelected = selectedCondition === condition.value;
+          return (
+            <TouchableOpacity
+              key={condition.value || 'all'}
               style={[
-                styles.optionText,
-                { color: theme.textSecondary },
-                selectedCondition === condition.value && { 
-                  color: theme.primary,
-                  fontWeight: '700'
-                },
+                styles.option,
+                isSelected && styles.optionSelected
               ]}
+              onPress={() => onConditionChange(condition.value)}
             >
-              {t(`weather.${condition.key}`)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text style={styles.optionIcon}>{condition.icon}</Text>
+              <Text
+                style={[
+                  styles.optionText,
+                  isSelected && styles.optionTextSelected
+                ]}
+              >
+                {t(`weather.${condition.key}`)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -59,6 +52,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 18,
     fontWeight: '700',
+    color: '#1565C0',
     marginBottom: 10,
   },
   optionsContainer: {
@@ -70,18 +64,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 56,
-    borderRadius: 28,
-    borderWidth: 3,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#1976D2',
+    backgroundColor: 'white',
+  },
+  optionSelected: {
+    backgroundColor: '#1976D2',
+    borderColor: '#1976D2',
   },
   optionIcon: {
-    fontSize: 24,
+    fontSize: 22,
     marginRight: 6,
   },
   optionText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
+    color: '#1976D2',
+  },
+  optionTextSelected: {
+    color: 'white',
   },
 });
 
