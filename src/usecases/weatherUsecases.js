@@ -132,10 +132,22 @@ export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCon
 
   console.log(`🔍 After filter: ${filteredPlaces.length} places`);
 
-  // LIMIT TO 30 PLACES FOR PERFORMANCE
-  const MAX_PLACES_ON_MAP = 30;
+  // LIMIT based on radius for performance
+  // Small radius: fewer places needed (they're close together)
+  // Large radius: more places needed (they're spread out)
+  let MAX_PLACES_ON_MAP;
+  if (radiusKm <= 400) {
+    MAX_PLACES_ON_MAP = 100;
+  } else if (radiusKm <= 800) {
+    MAX_PLACES_ON_MAP = 300;
+  } else if (radiusKm <= 1500) {
+    MAX_PLACES_ON_MAP = 1000;
+  } else {
+    MAX_PLACES_ON_MAP = 3000; // Large radius: show MANY places
+  }
+  
   if (filteredPlaces.length > MAX_PLACES_ON_MAP) {
-    console.log(`⚡ Limiting to ${MAX_PLACES_ON_MAP} places for performance`);
+    console.log(`⚡ Limiting to ${MAX_PLACES_ON_MAP} places for radius ${radiusKm}km`);
     filteredPlaces = filteredPlaces.slice(0, MAX_PLACES_ON_MAP);
   }
 

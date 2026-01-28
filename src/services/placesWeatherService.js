@@ -51,7 +51,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
       .from('places_with_latest_weather')
       .select(`
         id, name, latitude, longitude, country_code, region,
-        place_category, population, attractiveness_score,
+        place_category, population, attractiveness_score, clustering_radius_m,
         temperature, feels_like, humidity, wind_speed, wind_gust,
         cloud_cover, rain_1h, rain_3h, snow_1h, snow_3h, snow_24h,
         weather_main, weather_description, weather_icon,
@@ -79,16 +79,11 @@ export const getPlacesWithWeather = async (filters = {}) => {
     // WORKAROUND: Supabase has 1000-row limit!
     // We need to fetch multiple pages
     const PAGE_SIZE = 1000;
-    // CRITICAL: For large radius, we need enough pages to ensure ALL countries
-    // But with Early Exit optimization, we usually stop much earlier!
-    const MAX_PAGES = filters.radiusKm >= 1500 ? 30 : 10; // 30k max (but Early Exit at ~10-15 pages)
+    // CRITICAL: For large radius, we need enough pages
+    const MAX_PAGES = filters.radiusKm >= 1500 ? 50 : 10; // 50k max for large radius
     let allData = [];
     let page = 0;
     let hasMore = true;
-    
-    // For large radius: Track if we have all important countries (early exit optimization)
-    const targetCountries = filters.radiusKm >= 1500 ? ['SE', 'NO', 'DK', 'FI'] : [];
-    const foundCountries = new Set();
     
     while (hasMore && page < MAX_PAGES) {
       const { data: pageData, error } = await query
@@ -101,24 +96,9 @@ export const getPlacesWithWeather = async (filters = {}) => {
         hasMore = pageData.length === PAGE_SIZE; // Continue if we got a full page
         page++;
         
-        // Track countries (for early exit)
-        if (targetCountries.length > 0) {
-          pageData.forEach(p => {
-            if (targetCountries.includes(p.country_code)) {
-              foundCountries.add(p.country_code);
-            }
-          });
-        }
-        
         // Log progress for large fetches
         if (page % 5 === 0) {
-          console.log(`📥 Fetched ${page}/${MAX_PAGES} pages (${allData.length} places) - Scandinavia: ${Array.from(foundCountries).join(',') || 'none'}...`);
-        }
-        
-        // EARLY EXIT: If we have all target countries AND enough data, stop fetching
-        if (targetCountries.length > 0 && foundCountries.size >= targetCountries.length && allData.length >= 5000) {
-          console.log(`✅ Early exit: Found all ${targetCountries.length} countries after ${page} pages!`);
-          break;
+          console.log(`📥 Fetched ${page}/${MAX_PAGES} pages (${allData.length} places)...`);
         }
       } else {
         hasMore = false;
@@ -183,159 +163,21 @@ export const getPlacesWithWeather = async (filters = {}) => {
         })
         .filter(place => !filters.radiusKm || place.distance <= filters.radiusKm);
       
-      // For LARGE radius: Don't sort by distance! This causes near countries to dominate.
-      // Instead: Sort by attractiveness to get best places from ALL countries
-      if (filters.radiusKm >= 1500) {
-        places = places.sort((a, b) => {
-          // Random-ish sort to avoid distance bias
-          // Use attractiveness but with tie-breaking by population, then country to ensure diversity
-          const scoreDiff = (b.attractiveness_score || 50) - (a.attractiveness_score || 50);
-          if (Math.abs(scoreDiff) > 10) return scoreDiff; // Only if significant
-          // If scores are similar, prefer higher population
-          if (Math.abs(scoreDiff) <= 10) {
-            const popDiff = (b.population || 0) - (a.population || 0);
-            if (popDiff !== 0) return popDiff;
-          }
-          // Otherwise semi-random based on country code
-          return a.country_code.localeCompare(b.country_code);
-        });
-      }
-      
-      // CRITICAL: For large radius, ensure we have data from ALL countries!
-      // Log country distribution BEFORE sectoring
-      if (filters.radiusKm >= 1500) {
-        const countriesBeforeSector = {};
-        places.forEach(p => {
-          countriesBeforeSector[p.country_code] = (countriesBeforeSector[p.country_code] || 0) + 1;
-        });
-        console.log(`🌍 Countries in raw data (${places.length} places):`, 
-          Object.entries(countriesBeforeSector)
-            .filter(([cc]) => ['SE', 'NO', 'DK', 'FI'].includes(cc))
-            .map(([cc, cnt]) => `${cc}:${cnt}`)
-            .join(', ') || 'NO Scandinavia! ❌');
-      }
-      
-      // For LARGE radius: Use geographic sampling to ensure coverage in ALL directions
-      if (filters.radiusKm >= 1500) {
-        // DEBUG: Check SE places BEFORE sectoring
-        const sePlacesBefore = places.filter(p => p.country_code === 'SE');
-        console.log(`🇸🇪 SE places BEFORE sectoring: ${sePlacesBefore.length}`);
-        if (sePlacesBefore.length > 0) {
-          const seSectors = {};
-          sePlacesBefore.forEach(p => {
-            seSectors[p.sector] = (seSectors[p.sector] || 0) + 1;
-          });
-          console.log(`   SE by sector:`, seSectors);
-        }
-        
-        // Group by sector
-        const sectors = {};
-        places.forEach(place => {
-          const s = place.sector;
-          if (!sectors[s]) sectors[s] = [];
-          sectors[s].push(place);
-        });
-        
-        // Take best places from each sector (by score, then distance)
-        const MAX_PER_SECTOR = 40; // Up to 40 places per direction (16 dirs = 640 total, but will be less)
-        let balancedPlaces = [];
-        
-        for (let s = 0; s < 16; s++) {
-          if (sectors[s]) {
-            // GEOGRAPHIC DIVERSITY: Ensure ALL countries in sector are represented!
-            const sectorPlaces = sectors[s];
-            
-            // Group by country in this sector
-            const byCountry = {};
-            sectorPlaces.forEach(p => {
-              const cc = p.country_code;
-              if (!byCountry[cc]) byCountry[cc] = [];
-              byCountry[cc].push(p);
-            });
-            
-            // Take top 3 places from EACH country (ensures SE, NO, DK, FI all represented)
-            let diversePlaces = [];
-            Object.values(byCountry).forEach(countryPlaces => {
-              const top3 = countryPlaces
-                .sort((a, b) => {
-                  // Sort by score, then population, then distance
-                  const scoreDiff = (b.attractiveness_score || 50) - (a.attractiveness_score || 50);
-                  if (Math.abs(scoreDiff) > 5) return scoreDiff;
-                  // If scores are similar, prefer higher population
-                  const popDiff = (b.population || 0) - (a.population || 0);
-                  if (popDiff !== 0) return popDiff;
-                  return a.distance - b.distance;
-                })
-                .slice(0, 3);
-              diversePlaces = diversePlaces.concat(top3);
-            });
-            
-            // Fill remaining slots with best places overall
-            const remainingSlots = MAX_PER_SECTOR - diversePlaces.length;
-            if (remainingSlots > 0) {
-              const remaining = sectorPlaces.filter(p => !diversePlaces.includes(p));
-              const additional = remaining
-                .sort((a, b) => {
-                  // Sort by attractiveness, then population
-                  const scoreDiff = (b.attractiveness_score || 50) - (a.attractiveness_score || 50);
-                  if (scoreDiff !== 0) return scoreDiff;
-                  return (b.population || 0) - (a.population || 0);
-                })
-                .slice(0, remainingSlots);
-              diversePlaces = diversePlaces.concat(additional);
-            }
-            
-            balancedPlaces = balancedPlaces.concat(diversePlaces);
-          }
-        }
-        
-        // DEBUG: SE places AFTER sectoring
-        const sePlacesAfter = balancedPlaces.filter(p => p.country_code === 'SE');
-        console.log(`🇸🇪 SE places AFTER sectoring: ${sePlacesAfter.length}`);
-        if (sePlacesBefore.length > 0 && sePlacesAfter.length === 0) {
-          console.log(`   ❌ SE was FILTERED OUT in sectoring!`);
-          // Check which sector SE was in and what got selected instead
-          sePlacesBefore.forEach(se => {
-            const sector = se.sector;
-            const sectorSize = sectors[sector]?.length || 0;
-            console.log(`   SE place "${se.name}" in sector ${sector} (${sectorSize} total places in sector)`);
-          });
-        }
-        
-        console.log(`🧭 Geographic sampling: ${balancedPlaces.length} places across 16 directions`);
-        places = balancedPlaces;
-      } else {
-        // Small/medium radius: Sort by attractiveness score first, then population
-        places = places.sort((a, b) => {
-          const scoreDiff = (b.attractiveness_score || 50) - (a.attractiveness_score || 50);
-          if (scoreDiff !== 0) return scoreDiff;
-          
-          // If scores are equal, prefer higher population
-          const popDiff = (b.population || 0) - (a.population || 0);
-          if (popDiff !== 0) return popDiff;
-          
-          const tempA = a.temperature || -999;
-          const tempB = b.temperature || -999;
-          if (tempB !== tempA) return tempB - tempA;
-          
-          return a.distance - b.distance;
-        });
-      }
-    } else {
-      // No location filters - sort by attractiveness, population, and temperature
-      places = places.sort((a, b) => {
-        const scoreDiff = (b.attractiveness_score || 50) - (a.attractiveness_score || 50);
-        if (scoreDiff !== 0) return scoreDiff;
-        
-        // If scores are equal, prefer higher population
-        const popDiff = (b.population || 0) - (a.population || 0);
-        if (popDiff !== 0) return popDiff;
-        
-        const tempA = a.temperature || -999;
-        const tempB = b.temperature || -999;
-        return tempB - tempA;
-      });
+      // NO BACKEND SECTORING! Return ALL places sorted by quality
+      // Let the frontend (MapScreen) do the geographic filtering
+      console.log(`🗺️ Backend: Returning ALL ${places.length} places in radius (no sectoring)`);
     }
+    
+    // Sort by score + population only (let frontend handle geographic distribution)
+    places = places.sort((a, b) => {
+      const scoreDiff = (b.attractiveness_score || 50) - (a.attractiveness_score || 50);
+      if (Math.abs(scoreDiff) > 5) return scoreDiff;
+      
+      const popDiff = (b.population || 0) - (a.population || 0);
+      if (popDiff !== 0) return popDiff;
+      
+      return a.distance - b.distance;
+    });
 
     // Adapt to app format
     const adaptedPlaces = places.map(place => adaptPlaceToDestination(place));
@@ -515,6 +357,8 @@ function adaptPlaceToDestination(place) {
     
     // Attractiveness score
     attractivenessScore: place.attractiveness_score || 50,
+    population: place.population || 0,
+    clusteringRadiusM: place.clustering_radius_m || 50000, // Default 50km if missing
     
     // Distance (filled in by getPlacesWithWeather if applicable)
     distance: place.distance || null,

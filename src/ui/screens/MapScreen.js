@@ -54,11 +54,11 @@ const MapScreen = ({ navigation }) => {
   const [centerPoint, setCenterPoint] = useState(null); // Custom center point (if set)
   const [centerPointWeather, setCenterPointWeather] = useState(null); // Weather for custom center
   const [destinations, setDestinations] = useState([]);
-  const [filteredDestinations, setFilteredDestinations] = useState([]); // For zoom-based filtering
-  const [allLoadedDestinations, setAllLoadedDestinations] = useState([]); // ALL destinations from DB (cached)
-  const [isFilteringMarkers, setIsFilteringMarkers] = useState(false); // Loading state for filtering
-  const zoomDebounceTimer = useRef(null); // Debounce timer for zoom
+  const [visibleMarkers, setVisibleMarkers] = useState([]); // Filtered markers based on zoom
+  const [currentZoom, setCurrentZoom] = useState(5); // Track zoom level
+  const [currentBounds, setCurrentBounds] = useState(null); // Track viewport bounds
   const radiusDebounceTimer = useRef(null); // Debounce timer for radius changes
+  const boundsDebounceTimer = useRef(null); // Debounce timer for bounds changes
   const [radius, setRadius] = useState(500); // Default 500km
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [selectedDate, setSelectedDate] = useState('today'); // Date filter (mock for now)
@@ -76,9 +76,7 @@ const MapScreen = ({ navigation }) => {
   // const [warnings, setWarnings] = useState([]); // Weather warnings - DISABLED
   // const [showWarnings, setShowWarnings] = useState(true); // Toggle for warnings display - DISABLED
   // const [showSearch, setShowSearch] = useState(false); // Toggle search bar - DISABLED (MapSearchBar component missing)
-  const [currentZoom, setCurrentZoom] = useState(5); // Current zoom level (start zoomed out for clean overview)
   const [cachedData, setCachedData] = useState(null); // Cache for destinations
-  // enableSmartSpacing removed - now ALWAYS active based on zoom!
 
   useEffect(() => {
     (async () => {
@@ -121,12 +119,23 @@ const MapScreen = ({ navigation }) => {
       }
 
       let currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation({
+      const initialRegion = {
         latitude: currentLocation.coords.latitude,
         longitude: currentLocation.coords.longitude,
         latitudeDelta: 2,
         longitudeDelta: 2,
-      });
+      };
+      setLocation(initialRegion);
+      
+      // Set initial bounds
+      const initialBounds = {
+        north: initialRegion.latitude + initialRegion.latitudeDelta / 2,
+        south: initialRegion.latitude - initialRegion.latitudeDelta / 2,
+        east: initialRegion.longitude + initialRegion.longitudeDelta / 2,
+        west: initialRegion.longitude - initialRegion.longitudeDelta / 2,
+      };
+      setCurrentBounds(initialBounds);
+      
       setLoading(false);
     })();
   }, []);
@@ -164,33 +173,31 @@ const MapScreen = ({ navigation }) => {
     };
   }, [location, radius, selectedCondition, centerPoint, centerPointWeather]);
 
-  // Update filtered destinations based on zoom level with DEBOUNCE for performance
+  // Update visible markers when zoom, bounds, or destinations change
   useEffect(() => {
-    // Show loading indicator IMMEDIATELY
-    setIsFilteringMarkers(true);
-    
-    // Clear previous timer
-    if (zoomDebounceTimer.current) {
-      clearTimeout(zoomDebounceTimer.current);
+    if (destinations.length > 0 && currentBounds) {
+      // Debounce bounds changes for performance
+      if (boundsDebounceTimer.current) {
+        clearTimeout(boundsDebounceTimer.current);
+      }
+      
+      boundsDebounceTimer.current = setTimeout(() => {
+        const visible = getVisibleMarkers(destinations, currentZoom, currentBounds);
+        setVisibleMarkers(visible);
+        
+        const specialCount = visible.filter(v => v.isCurrentLocation || v.isCenterPoint).length;
+        const badgeCount = visible.filter(v => v.badges && v.badges.length > 0 && !v.isCurrentLocation && !v.isCenterPoint).length;
+        const regularCount = visible.length - specialCount - badgeCount;
+        console.log(`🔍 Zoom ${currentZoom}: ${visible.length} markers (${specialCount} special + ${badgeCount} badges + ${regularCount} regular) of ${destinations.length}`);
+      }, 300);
     }
     
-    // Debounce: Wait 100ms after zoom stops before filtering (reduced from 150ms)
-    zoomDebounceTimer.current = setTimeout(() => {
-      // DISABLED: applyZoomBasedFiltering() - using simple copy instead
-      setFilteredDestinations(destinations);
-      
-      // Keep spinner visible for extra 400ms so user sees it
-      setTimeout(() => {
-        setIsFilteringMarkers(false);
-      }, 400);
-    }, 100);
-    
     return () => {
-      if (zoomDebounceTimer.current) {
-        clearTimeout(zoomDebounceTimer.current);
+      if (boundsDebounceTimer.current) {
+        clearTimeout(boundsDebounceTimer.current);
       }
     };
-  }, [destinations, currentZoom, radius]); // radius added - used in filtering logic!
+  }, [destinations, currentZoom, currentBounds]);
 
   const loadDestinations = async () => {
     if (!location) return;
@@ -419,23 +426,7 @@ const MapScreen = ({ navigation }) => {
     return '=';
   };
 
-  /**
-   * Get marker scale based on zoom level - EXTREME VERSION
-   * Zoom 0-3 (very far out): 0.25 (75% smaller = TINY!)
-   * Zoom 5 (medium): 1.0 (normal)
-   * Zoom 12+ (zoomed in): 2.0 (DOUBLE size!)
-   */
-  const getMarkerScale = (zoom) => {
-    // EXTREME interpolation:
-    // Zoom 0-5: scale from 0.25 to 1.0 (4x growth!)
-    // Zoom 5-12: scale from 1.0 to 2.0 (2x growth!)
-    if (zoom <= 5) {
-      return 0.25 + (zoom / 5) * 0.75; // 0.25 to 1.0
-    } else {
-      const zoomAbove5 = Math.min(zoom - 5, 7); // Cap at 7 (zoom 12)
-      return 1.0 + (zoomAbove5 / 7) * 1.0; // 1.0 to 2.0
-    }
-  };
+  // No more dynamic marker scaling - library handles density!
 
   const toggleMapType = () => {
     const mapTypes = ['standard', 'mutedStandard', 'satellite', 'hybrid', 'terrain'];
@@ -499,118 +490,103 @@ const MapScreen = ({ navigation }) => {
   };
 
   /**
-   * SMART ZOOM-BASED FILTERING (CLIENT-SIDE) - OPTIMIZED!
-   * Filters destinations dynamically based on zoom without DB requests!
+   * Calculate display score: Badges = max priority, otherwise use attractiveness
    */
-  const applyZoomBasedFiltering = () => {
-    if (!destinations.length) {
-      setFilteredDestinations([]);
-      return;
-    }
-
-    const startTime = performance.now();
-    
-    // ALWAYS keep current location and center point (never filter them out!)
-    const specialMarkers = destinations.filter(d => d.isCurrentLocation || d.isCenterPoint);
-    let otherDestinations = destinations.filter(d => !d.isCurrentLocation && !d.isCenterPoint);
-
-    // ADAPTIVE FILTERING: Use ZOOM + RADIUS!
-    // Lower zoom = MUCH fewer places (avoid crowding)
-    // Higher zoom = More places visible
-    // IMPORTANT: Places with badges are ALWAYS shown (exempt from filtering)
-    
-    // Separate places with badges (they're always visible)
-    const placesWithBadges = otherDestinations.filter(dest => dest.badges && dest.badges.length > 0);
-    const placesWithoutBadges = otherDestinations.filter(dest => !dest.badges || dest.badges.length === 0);
-    
-    // Apply zoom-based filtering ONLY to places without badges
-    let filteredPlaces = placesWithoutBadges;
-    if (currentZoom <= 3) {
-      // VERY far out: Show ONLY top places, huge spacing
-      filteredPlaces = filteredPlaces
-        .filter(dest => (dest.attractivenessScore || 50) > 60) // RELAXED from 65 to 60
-        .sort((a, b) => (b.attractivenessScore || 50) - (a.attractivenessScore || 50));
-      filteredPlaces = filterByMinDistance(filteredPlaces, 150); // RELAXED from 200km to 150km
-    } else if (currentZoom <= 5) {
-      // Far out: Show good places, large spacing
-      filteredPlaces = filteredPlaces
-        .filter(dest => (dest.attractivenessScore || 50) > 55); // RELAXED from 58 to 55
-      filteredPlaces = filterByMinDistance(filteredPlaces, 100); // RELAXED from 120km to 100km
-    } else if (currentZoom <= 7) {
-      // Medium distance: More places, medium spacing
-      filteredPlaces = filteredPlaces
-        .filter(dest => (dest.attractivenessScore || 50) > 50); // RELAXED from 52 to 50
-      filteredPlaces = filterByMinDistance(filteredPlaces, 50); // RELAXED from 60km to 50km
-    } else if (currentZoom <= 9) {
-      // Closer: Most places, smaller spacing
-      filteredPlaces = filteredPlaces
-        .filter(dest => (dest.attractivenessScore || 50) > 45); // RELAXED from 48 to 45
-      filteredPlaces = filterByMinDistance(filteredPlaces, 25); // RELAXED from 30km to 25km
-    } else if (currentZoom <= 11) {
-      // Close: Almost all places, minimal spacing
-      filteredPlaces = filteredPlaces
-        .filter(dest => (dest.attractivenessScore || 50) > 40); // RELAXED from 45 to 40
-      filteredPlaces = filterByMinDistance(filteredPlaces, 12); // RELAXED from 15km to 12km
-    }
-    // Zoom 12+: Show ALL places, no filtering
-    
-    // Combine filtered places with badge places (which are always visible)
-    otherDestinations = [...placesWithBadges, ...filteredPlaces];
-
-    // Combine special markers + filtered destinations
-    const filtered = [...specialMarkers, ...otherDestinations];
-
-    const duration = performance.now() - startTime;
-    
-    // DEBUG: Show country distribution
-    const byCountry = {};
-    filtered.forEach(d => {
-      if (!d.isCurrentLocation && !d.isCenterPoint) {
-        const cc = d.countryCode || '??';
-        byCountry[cc] = (byCountry[cc] || 0) + 1;
-      }
-    });
-    const topCountries = Object.entries(byCountry).sort((a,b) => b[1]-a[1]).slice(0,5);
-    console.log(`🔍 Radius ${radius}km, Zoom ${currentZoom}: Showing ${filtered.length} of ${destinations.length} places (${duration.toFixed(1)}ms)`);
-    console.log(`   📍 Countries shown: ${topCountries.map(([cc, cnt]) => `${cc}:${cnt}`).join(', ')}`);
-    
-    // DEBUG: Show Sweden specifically
-    const swedenCount = byCountry['SE'] || 0;
-    const totalSweden = destinations.filter(d => d.countryCode === 'SE' && !d.isCurrentLocation && !d.isCenterPoint).length;
-    if (totalSweden > 0) {
-      console.log(`   🇸🇪 Sweden: ${swedenCount}/${totalSweden} shown (${((swedenCount/totalSweden)*100).toFixed(1)}%)`);
+  const getDisplayScore = (place) => {
+    // Orte mit Badges = immer max Score (100)
+    if (place.badges && place.badges.length > 0) {
+      return 100;
     }
     
-    setFilteredDestinations(filtered);
+    // Orte ohne Badges = attractivenessScore
+    return place.attractivenessScore || 50;
   };
 
   /**
-   * Filter destinations by minimum distance
+   * QUALITY-FIRST GREEDY ALGORITHM: Strict filtering at low zoom, more markers when zoomed in
    */
-  const filterByMinDistance = (dests, minDistanceKm) => {
-    const result = [];
+  const getVisibleMarkers = (allPlaces, zoom, bounds) => {
+    // VIEL strengere Distance bei niedrigem Zoom (clean overview)
+    const minDistKm = zoom < 5 ? 300 :   // Sehr weit raus - nur Top-Cities
+                      zoom < 7 ? 150 :   // Weit - beste Places
+                      zoom < 9 ? 70 :    // Medium
+                      zoom < 11 ? 30 :   // Nah
+                      zoom < 13 ? 15 : 7; // Sehr nah
     
-    for (const dest of dests) {
-      const tooClose = result.some(existing => {
-        const distance = getDistanceKm(
-          dest.lat,
-          dest.lon,
-          existing.lat,
-          existing.lon
-        );
-        return distance < minDistanceKm;
+    // Niedrigeres Limit bei niedrigem Zoom (quality over quantity)
+    const maxMarkers = zoom < 5 ? 30 :    // Nur Top-Orte
+                       zoom < 7 ? 80 :    // Beste Places
+                       zoom < 10 ? 200 :  // Mehr Details
+                       zoom < 13 ? 400 : 800; // Volle Dichte
+    
+    // HÖHERER Score-Threshold bei niedrigem Zoom (only best places)
+    const minScore = zoom < 7 ? 70 :      // Nur beste Places
+                     zoom < 10 ? 55 : 40;  // Mehr erlauben
+    
+    // ALWAYS keep special markers (current location, center point)
+    const specialMarkers = allPlaces.filter(p => p.isCurrentLocation || p.isCenterPoint);
+    const regularPlaces = allPlaces.filter(p => !p.isCurrentLocation && !p.isCenterPoint);
+    
+    // Viewport-Filter: Only visible area (with padding for smooth experience)
+    const inViewport = regularPlaces.filter(p => {
+      if (!bounds) return true; // No bounds yet, show all
+      
+      const lat = p.lat;
+      const lon = p.lon;
+      
+      // Add 20% padding to bounds for smoother experience
+      const latPadding = (bounds.north - bounds.south) * 0.2;
+      const lonPadding = (bounds.east - bounds.west) * 0.2;
+      
+      return lat >= bounds.south - latPadding &&
+             lat <= bounds.north + latPadding &&
+             lon >= bounds.west - lonPadding &&
+             lon <= bounds.east + lonPadding;
+    });
+    
+    // Calculate display scores (badges = 100, otherwise attractiveness)
+    const withScores = inViewport.map(p => ({
+      ...p,
+      displayScore: getDisplayScore(p)
+    }));
+    
+    // Sort by DISPLAY SCORE (badges first!)
+    const sorted = withScores
+      .filter(p => p.displayScore >= minScore)  // Use dynamic score for filtering!
+      .sort((a, b) => {
+        const scoreDiff = b.displayScore - a.displayScore;
+        if (Math.abs(scoreDiff) > 5) return scoreDiff;
+        return (b.population || 0) - (a.population || 0);
       });
+    
+    // Debug: Show breakdown
+    const withBadges = sorted.filter(p => p.badges && p.badges.length > 0).length;
+    const withoutBadges = sorted.length - withBadges;
+    console.log(`📍 Viewport: ${inViewport.length} places → ${sorted.length} after filter (${withBadges} with badges, ${withoutBadges} without)`);
+    
+    // Greedy Selection
+    const selected = [...specialMarkers]; // Start with special markers
+    
+    for (const place of sorted) {
+      // Too close to existing marker?
+      const tooClose = selected.some(existing => 
+        getDistanceKm(place.lat, place.lon, existing.lat, existing.lon) < minDistKm
+      );
       
       if (!tooClose) {
-        result.push(dest);
+        selected.push(place);
       }
+      
+      if (selected.length >= maxMarkers) break;
     }
     
-    return result;
+    console.log(`✨ Selected ${selected.length} markers (minDist=${minDistKm}km, max=${maxMarkers})`);
+    
+    return selected;
   };
 
   /**
-   * Calculate distance between two points (Haversine)
+   * Calculate distance between two points (Haversine formula)
    */
   const getDistanceKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Earth radius in km
@@ -777,16 +753,30 @@ const MapScreen = ({ navigation }) => {
   };
 
   /**
-   * Track map region changes to determine zoom level + enforce boundaries
+   * Track map region changes to enforce boundaries + calculate zoom + bounds
    */
   const handleRegionChangeComplete = (region) => {
-    // Estimate zoom level from latitudeDelta
+    // Calculate zoom from latitudeDelta
     // Zoom ~= log2(360 / latitudeDelta)
     const zoom = Math.round(Math.log2(360 / region.latitudeDelta));
-    setCurrentZoom(Math.max(1, Math.min(20, zoom)));
+    const newZoom = Math.max(1, Math.min(20, zoom));
+    
+    if (newZoom !== currentZoom) {
+      console.log(`📏 Zoom changed: ${currentZoom} → ${newZoom}`);
+      setCurrentZoom(newZoom);
+    }
+    
+    // Calculate viewport bounds
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
+    const bounds = {
+      north: latitude + latitudeDelta / 2,
+      south: latitude - latitudeDelta / 2,
+      east: longitude + longitudeDelta / 2,
+      west: longitude - longitudeDelta / 2,
+    };
+    setCurrentBounds(bounds);
     
     // Enforce map boundaries
-    const { latitude, longitude } = region;
     let needsAdjustment = false;
     let newLatitude = latitude;
     let newLongitude = longitude;
@@ -902,8 +892,8 @@ const MapScreen = ({ navigation }) => {
           </Marker>
         )}
 
-        {/* Destinations - always show all (filteredDestinations already equals destinations if spacing disabled) */}
-        {filteredDestinations
+        {/* Greedy-filtered markers based on zoom + score */}
+        {visibleMarkers
           .filter(dest => showMockData || !dest.isMockData) // Filter mock data based on toggle
           .filter(dest => !showOnlyBadges || (dest.badges && dest.badges.length > 0)) // Filter by badges if toggle active
           .map((dest, index) => (
@@ -914,10 +904,7 @@ const MapScreen = ({ navigation }) => {
           >
             <View style={[
               styles.markerContainer, 
-              { 
-                backgroundColor: getWeatherColor(dest.condition),
-                transform: [{ scale: getMarkerScale(currentZoom) }]
-              },
+              { backgroundColor: getWeatherColor(dest.condition) },
               dest.isCurrentLocation && styles.currentLocationMarker,
               dest.isCenterPoint && styles.centerPointMarker
             ]}>
@@ -973,15 +960,8 @@ const MapScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* Small Loading Indicator for zoom filtering */}
-      {isFilteringMarkers && !loadingDestinations && (
-        <View style={styles.zoomLoadingIndicator}>
-          <ActivityIndicator size="small" color="#2196F3" />
-        </View>
-      )}
-
       {/* Empty state when trophy filter is active but no places */}
-      {showOnlyBadges && !loadingDestinations && filteredDestinations.filter(dest => dest.badges && dest.badges.length > 0).length === 0 && (
+      {showOnlyBadges && !loadingDestinations && visibleMarkers.filter(dest => dest.badges && dest.badges.length > 0).length === 0 && (
         <View style={[styles.emptyStateOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]}>
           <View style={[styles.emptyStateBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text style={styles.emptyStateIcon}>🏆</Text>
