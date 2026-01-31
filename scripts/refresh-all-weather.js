@@ -103,6 +103,7 @@ async function fetchWeather(place) {
       'wind_direction_10m_dominant',
       'sunrise',
       'sunset',
+      'sunshine_duration',
     ].join(','),
     forecast_days: 14, // 14 days as requested
     timezone: 'auto',
@@ -128,7 +129,6 @@ async function saveWeatherData(placeId, current, daily) {
   const record = {
     place_id: placeId,
     forecast_date: today,
-    forecast_timestamp: new Date(current.time).toISOString(),
     fetched_at: fetchedAt,
     temp_min: daily.temperature_2m_min[0],
     temp_max: daily.temperature_2m_max[0],
@@ -142,12 +142,13 @@ async function saveWeatherData(placeId, current, daily) {
     snow_volume: current.snowfall || 0,
     sunrise: daily.sunrise?.[0] ? new Date(daily.sunrise[0]).toISOString() : null,
     sunset: daily.sunset?.[0] ? new Date(daily.sunset[0]).toISOString() : null,
+    sunshine_duration: daily.sunshine_duration?.[0] || null,
     data_source: 'open-meteo',
   };
 
   const { error } = await supabase
     .from('weather_forecast')
-    .upsert(record, { onConflict: 'place_id,forecast_date,fetched_at' });
+    .upsert(record, { onConflict: 'place_id,forecast_date' }); // FIXED: kein fetched_at!
 
   if (error) throw error;
 }
@@ -163,7 +164,6 @@ async function saveForecast(placeId, daily) {
     return {
       place_id: placeId,
       forecast_date: time,
-      forecast_timestamp: new Date(time).toISOString(),
       fetched_at: fetchedAt,
       temp_min: daily.temperature_2m_min[actualIndex],
       temp_max: daily.temperature_2m_max[actualIndex],
@@ -173,18 +173,19 @@ async function saveForecast(placeId, daily) {
       wind_speed: daily.wind_speed_10m_max[actualIndex],
       precipitation_sum: daily.precipitation_sum[actualIndex],
       precipitation_probability: daily.precipitation_probability_max[actualIndex] / 100,
-      rain_probability: daily.precipitation_probability_max[actualIndex] / 100,
+      // rain_probability ENTFERNT (Duplikat von precipitation_probability)
       rain_volume: daily.rain_sum[actualIndex],
       snow_volume: daily.snowfall_sum[actualIndex],
       sunrise: daily.sunrise?.[actualIndex] ? new Date(daily.sunrise[actualIndex]).toISOString() : null,
       sunset: daily.sunset?.[actualIndex] ? new Date(daily.sunset[actualIndex]).toISOString() : null,
+      sunshine_duration: daily.sunshine_duration?.[actualIndex] || null,
       data_source: 'open-meteo',
     };
   });
 
   const { error } = await supabase
     .from('weather_forecast')
-    .upsert(records, { onConflict: 'place_id,forecast_date,fetched_at' });
+    .upsert(records, { onConflict: 'place_id,forecast_date' }); // FIXED: kein fetched_at!
 
   if (error) throw error;
 }
@@ -201,22 +202,18 @@ async function processBatch(places, batchNum, totalBatches) {
         const data = await fetchWeather(place);
         await saveWeatherData(place.id, data.current, data.daily);
         await saveForecast(place.id, data.daily);
-        
-        // Update last_weather_fetch
-        await supabase
-          .from('places')
-          .update({ last_weather_fetch: new Date().toISOString() })
-          .eq('id', place.id);
-        
         return { success: true, name: place.name, temp: data.current.temperature_2m };
       } catch (error) {
-        return { success: false, name: place.name, error: error.message };
+        // Log failed places with details for debugging
+        console.error(`  ❌ FAILED: ${place.name} (ID: ${place.id}) - ${error.message}`);
+        return { success: false, name: place.name, id: place.id, error: error.message };
       }
     })
   );
 
   const successCount = results.filter(r => r.success).length;
   const failCount = results.filter(r => !r.success).length;
+  const failedPlaces = results.filter(r => !r.success);
 
   // Log sample results
   const samples = results.filter(r => r.success).slice(0, 3);
@@ -225,7 +222,11 @@ async function processBatch(places, batchNum, totalBatches) {
   });
 
   if (failCount > 0) {
-    console.log(`  ❌ ${failCount} failed`);
+    console.log(`  ❌ ${failCount} failed in this batch`);
+    // Log summary of failed places for this batch
+    failedPlaces.forEach(f => {
+      console.log(`     - ${f.name}: ${f.error}`);
+    });
   }
 
   console.log(`  📊 Success: ${successCount}/${places.length}`);
@@ -256,7 +257,6 @@ async function main() {
       .from('places')
       .select('id, name, latitude, longitude, country_code')
       .eq('is_active', true)
-      .or('to_remove.eq.false,to_remove.is.null') // Only places NOT marked for removal
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     
     if (error) {

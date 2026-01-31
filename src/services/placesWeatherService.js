@@ -45,95 +45,241 @@ const fixWeatherCodeDescription = (description) => {
  */
 export const getPlacesWithWeather = async (filters = {}) => {
   try {
-    // Use the view - it's stable and tested
-    // CRITICAL: Use explicit columns (not *) to avoid React Native crash!
-    let query = supabase
-      .from('places_with_latest_weather')
-      .select(`
-        id, name, latitude, longitude, country_code, region,
-        place_category, population, attractiveness_score, clustering_radius_m,
-        temperature, feels_like, humidity, wind_speed, wind_gust,
-        cloud_cover, rain_1h, rain_3h, snow_1h, snow_3h, snow_24h,
-        weather_main, weather_description, weather_icon,
-        weather_timestamp, data_source,
-        stability_score, weather_trend
-      `);
-
-    // Radius filter (bounding box for performance)
+    // Date filter: defaults to today, can be 'today', 'tomorrow', or YYYY-MM-DD
+    const now = new Date();
+    let targetDate;
+    
+    if (filters.date === 'tomorrow') {
+      targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    } else if (filters.date === 'in2days') {
+      targetDate = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    } else if (filters.date === 'in3days') {
+      targetDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    } else if (filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date)) {
+      targetDate = filters.date; // Custom date in YYYY-MM-DD format
+    } else {
+      targetDate = now.toISOString().split('T')[0]; // Default: today
+    }
+    
+    console.log(`🌤️ Fetching places + weather for ${targetDate}...`);
+    
+    // Build bounding box
+    let latMin, latMax, lonMin, lonMax;
     if (filters.userLat && filters.userLon && filters.radiusKm) {
-      const { latMin, latMax, lonMin, lonMax } = getBoundingBox(
-        filters.userLat,
-        filters.userLon,
-        filters.radiusKm
-      );
-      
-      console.log(`📦 Bounding Box: Lat [${latMin.toFixed(2)}, ${latMax.toFixed(2)}], Lon [${lonMin.toFixed(2)}, ${lonMax.toFixed(2)}]`);
-      
-      query = query
-        .gte('latitude', latMin)
-        .lte('latitude', latMax)
-        .gte('longitude', lonMin)
-        .lte('longitude', lonMax);
+      const box = getBoundingBox(filters.userLat, filters.userLon, filters.radiusKm);
+      latMin = box.latMin; latMax = box.latMax; lonMin = box.lonMin; lonMax = box.lonMax;
     }
 
-    // WORKAROUND: Supabase has 1000-row limit!
-    // We need to fetch multiple pages
-    const PAGE_SIZE = 1000;
-    // CRITICAL: For large radius, we need enough pages
-    const MAX_PAGES = filters.radiusKm >= 1500 ? 50 : 10; // 50k max for large radius
-    let allData = [];
-    let page = 0;
-    let hasMore = true;
+    // Query 1: Get places
+    let placesQuery = supabase
+      .from('places')
+      .select('id, name, latitude, longitude, country_code, place_type, population, attractiveness_score, clustering_radius_m')
+      .eq('is_active', true);
     
-    while (hasMore && page < MAX_PAGES) {
-      const { data: pageData, error } = await query
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (latMin !== undefined) {
+      placesQuery = placesQuery
+        .gte('latitude', latMin).lte('latitude', latMax)
+        .gte('longitude', lonMin).lte('longitude', lonMax);
+    }
+    
+    const { data: places, error: placesError } = await placesQuery.limit(5000);
+    
+    if (placesError) {
+      console.error('❌ Places query failed:', placesError);
+      throw placesError;
+    }
+    
+    console.log(`📍 Got ${places?.length || 0} places`);
+    
+    if (!places || places.length === 0) {
+      return { places: [], error: null };
+    }
+    
+    // Query 2: Get weather for TODAY ONLY for our places
+    const placeIds = places.map(p => p.id);
+    // Hole Wetter für targetDate ODER nächste 3 Tage als Fallback
+    const fallbackDate = new Date(new Date(targetDate).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    console.log(`🌤️ Fetching weather for ${placeIds.length} places (${targetDate} to ${fallbackDate})...`);
+    
+    // Fetch in chunks of 200 to avoid URL length issues
+    let allWeather = [];
+    const CHUNK_SIZE = 200;
+    
+    // Filter out stale data (older than 7 days) to ensure fresh weather info
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    for (let i = 0; i < placeIds.length; i += CHUNK_SIZE) {
+      const chunk = placeIds.slice(i, i + CHUNK_SIZE);
+      const { data: chunkWeather, error: chunkError } = await supabase
+        .from('weather_forecast')
+        .select('place_id, forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, sunshine_duration, fetched_at')
+        .in('place_id', chunk)
+        .gte('forecast_date', targetDate)
+        .lte('forecast_date', fallbackDate)
+        .gte('fetched_at', sevenDaysAgo)  // Only data fetched in last 7 days
+        .order('forecast_date', { ascending: true });
       
-      if (error) throw error;
-      
-      if (pageData && pageData.length > 0) {
-        allData = allData.concat(pageData);
-        hasMore = pageData.length === PAGE_SIZE; // Continue if we got a full page
-        page++;
-        
-        // Log progress for large fetches
-        if (page % 5 === 0) {
-          console.log(`📥 Fetched ${page}/${MAX_PAGES} pages (${allData.length} places)...`);
-        }
-      } else {
-        hasMore = false;
+      if (!chunkError && chunkWeather) {
+        allWeather.push(...chunkWeather);
       }
     }
     
-    console.log(`✅ Fetched ${page} pages total: ${allData.length} places`);
+    console.log(`🌤️ Got ${allWeather.length} weather records (${targetDate} - ${fallbackDate})`);
     
-    // View returns flat data - no processing needed!
-    let places = allData || [];
-    
-    // NOTE: Weather data may be outdated (manual updates only)
-    // This is acceptable for now - showing old data is better than no data!
-    
-    console.log(`🗺️ DB returned ${places.length} places in bounding box`);
-    
-    // Debug: Show geographic distribution
-    if (places.length > 0) {
-      const byCountry = {};
-      places.forEach(p => {
-        const cc = p.country_code || '??';
-        byCountry[cc] = (byCountry[cc] || 0) + 1;
-      });
-      const top5 = Object.entries(byCountry).sort((a,b) => b[1]-a[1]).slice(0,5);
-      console.log(`📍 Top countries: ${top5.map(([cc, cnt]) => `${cc}:${cnt}`).join(', ')}`);
+    // Build weather map with forecast for multiple days
+    const weatherMap = {};
+    allWeather.forEach(w => {
+      if (!weatherMap[w.place_id]) {
+        weatherMap[w.place_id] = { today: null, tomorrow: null, day2: null, day3: null };
+      }
       
-      // Show latitude range
-      const lats = places.map(p => p.latitude);
-      const minLat = Math.min(...lats);
-      const maxLat = Math.max(...lats);
-      console.log(`🌍 Actual latitude range: ${minLat.toFixed(2)} to ${maxLat.toFixed(2)}`);
-    }
-
+      const entry = weatherMap[w.place_id];
+      // Fill in order: today, tomorrow, day2, day3
+      if (!entry.today) entry.today = w;
+      else if (!entry.tomorrow) entry.tomorrow = w;
+      else if (!entry.day2) entry.day2 = w;
+      else if (!entry.day3) entry.day3 = w;
+    });
+    
+    // Helper to map weather_main to condition
+    const getCondition = (weatherMain) => {
+      if (!weatherMain) return 'cloudy';
+      const main = weatherMain.toLowerCase();
+      if (main === 'clear') return 'sunny';
+      if (main === 'clouds') return 'cloudy';
+      if (main === 'rain' || main === 'drizzle' || main === 'thunderstorm') return 'rainy';
+      if (main === 'snow') return 'snowy';
+      return 'cloudy';
+    };
+    
+    
+    // Combine places with weather (including forecast)
+    let placesData = places.map(p => {
+      const wData = weatherMap[p.id] || {};
+      const today = wData.today || {};
+      const tomorrow = wData.tomorrow;
+      const day2 = wData.day2;
+      const day3 = wData.day3;
+      
+      // Build forecast structure for badges AND UI display
+      const forecast = {
+        today: today ? {
+          condition: getCondition(today.weather_main),
+          temp: today.temp_max,
+          high: Math.round(today.temp_max),
+          low: Math.round(today.temp_min),
+          description: today.weather_description,
+        } : null,
+        tomorrow: tomorrow ? {
+          condition: getCondition(tomorrow.weather_main),
+          temp: tomorrow.temp_max,
+          high: Math.round(tomorrow.temp_max),
+          low: Math.round(tomorrow.temp_min),
+          description: tomorrow.weather_description,
+        } : null,
+        day2: day2 ? {
+          condition: getCondition(day2.weather_main),
+          temp: day2.temp_max,
+          high: Math.round(day2.temp_max),
+          low: Math.round(day2.temp_min),
+          description: day2.weather_description,
+        } : null,
+        day3: day3 ? {
+          condition: getCondition(day3.weather_main),
+          temp: day3.temp_max,
+          high: Math.round(day3.temp_max),
+          low: Math.round(day3.temp_min),
+          description: day3.weather_description,
+        } : null,
+      };
+      
+      return {
+        ...p,
+        temp_min: today.temp_min,
+        temp_max: today.temp_max,
+        weather_main: today.weather_main,
+        weather_description: today.weather_description,
+        weather_icon: today.weather_icon,
+        wind_speed: today.wind_speed,
+        forecast_date: today.forecast_date,
+        sunshine_duration: today.sunshine_duration,
+        forecast, // Include multi-day forecast!
+      };
+    });
+    
+    const withWeather = placesData.filter(p => p.temp_min != null).length;
+    console.log(`🔗 ${withWeather}/${placesData.length} places have weather`);
+    
+    // Transform places - ONLY include those with valid temperature!
+    let finalPlaces = placesData
+      .filter(place => place.temp_min != null && place.temp_max != null) // Skip places without temp!
+      .map(place => {
+        // Map weather_main to condition
+        let condition = 'cloudy';
+        if (place.weather_main) {
+          const main = place.weather_main.toLowerCase();
+          if (main === 'clear') condition = 'sunny';
+          else if (main === 'clouds') condition = 'cloudy';
+          else if (main === 'rain' || main === 'drizzle' || main === 'thunderstorm') condition = 'rainy';
+          else if (main === 'snow') condition = 'snowy';
+        }
+        
+        return {
+          id: place.id,
+          name: place.name,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          lat: place.latitude,
+          lon: place.longitude,
+          country_code: place.country_code, // WICHTIG für Ländername!
+          place_type: place.place_type,
+          place_category: place.place_type,
+          population: place.population,
+          attractiveness_score: place.attractiveness_score,
+          attractivenessScore: place.attractiveness_score,
+          clustering_radius_m: place.clustering_radius_m,
+          
+          // Weather data - guaranteed to exist! Always show MAX temp
+          temperature: Math.round(place.temp_max),
+          temp_min: place.temp_min,
+          temp_max: place.temp_max,
+          condition: condition,
+          weather_main: place.weather_main || 'Clouds',
+          weather_description: place.weather_description || 'No data',
+          weather_icon: place.weather_icon || '03d',
+          wind_speed: place.wind_speed,
+          sunshine_duration: place.sunshine_duration,
+          forecast: place.forecast, // Multi-day forecast for badges!
+          precipitation_sum: null,
+          precipitation_probability: null,
+          sunrise: null,
+          sunset: null,
+          rain_1h: null,
+          snow_1h: null,
+          weather_timestamp: null,
+          
+          feels_like: null,
+          humidity: null,
+          cloud_cover: null,
+          rain_3h: null,
+          snow_3h: null,
+          snow_24h: null,
+          wind_gust: null,
+          stability_score: null,
+          weather_trend: null
+        };
+      });
+    
+    const withWeatherCount = finalPlaces.length;
+    console.log(`✅ ${withWeatherCount} places with valid temperature data`);
+    
+    // Sort by temp (warmest first)
+    finalPlaces.sort((a, b) => (b.temp_max || 0) - (a.temp_max || 0));
+    
+    console.log(`📊 ${finalPlaces.length} places with weather`);
+    
     if (filters.userLat && filters.userLon) {
-      places = places
+      finalPlaces = finalPlaces
         .map(place => {
           const distance = getDistanceKm(
             filters.userLat,
@@ -163,24 +309,15 @@ export const getPlacesWithWeather = async (filters = {}) => {
         })
         .filter(place => !filters.radiusKm || place.distance <= filters.radiusKm);
       
-      // NO BACKEND SECTORING! Return ALL places sorted by quality
-      // Let the frontend (MapScreen) do the geographic filtering
-      console.log(`🗺️ Backend: Returning ALL ${places.length} places in radius (no sectoring)`);
+      console.log(`🗺️ Backend: ${finalPlaces.length} places in radius`);
     }
     
-    // Sort by score + population only (let frontend handle geographic distribution)
-    places = places.sort((a, b) => {
-      const scoreDiff = (b.attractiveness_score || 50) - (a.attractiveness_score || 50);
-      if (Math.abs(scoreDiff) > 5) return scoreDiff;
-      
-      const popDiff = (b.population || 0) - (a.population || 0);
-      if (popDiff !== 0) return popDiff;
-      
-      return a.distance - b.distance;
-    });
+    // Sort by temp (warmest first)
+    finalPlaces.sort((a, b) => (b.temp_max || 0) - (a.temp_max || 0));
 
-    // Adapt to app format
-    const adaptedPlaces = places.map(place => adaptPlaceToDestination(place));
+    // Adapt to app format (pass locale for country name translation)
+    const locale = filters.locale || 'en';
+    const adaptedPlaces = finalPlaces.map(place => adaptPlaceToDestination(place, locale));
 
     return { places: adaptedPlaces, error: null };
   } catch (error) {
@@ -192,45 +329,73 @@ export const getPlacesWithWeather = async (filters = {}) => {
 /**
  * Get single place with weather + forecast
  * @param {string} placeId - Place ID
+ * @param {string} locale - Locale for translations (e.g. 'de', 'en')
  * @returns {Promise<{place, forecast, error}>}
  */
-export const getPlaceDetail = async (placeId) => {
+export const getPlaceDetail = async (placeId, locale = 'en') => {
   try {
-    // Get place with latest weather
+    // Get place (separate query - no FK needed)
     const { data: place, error: placeError } = await supabase
-      .from('places_with_latest_weather')
-      .select(`
-        id, name, latitude, longitude, country_code, region,
-        place_category, population, attractiveness_score,
-        temperature, feels_like, humidity, wind_speed, wind_gust,
-        cloud_cover, rain_1h, rain_3h, snow_1h, snow_3h, snow_24h,
-        weather_main, weather_description, weather_icon,
-        weather_timestamp, data_source,
-        stability_score, weather_trend
-      `)
+      .from('places')
+      .select('id, name, latitude, longitude, country_code, place_type, population, attractiveness_score')
       .eq('id', placeId)
       .single();
 
     if (placeError) throw placeError;
+    if (!place) {
+      return { place: null, forecast: [], error: 'Place not found' };
+    }
+    
+    // Get today's weather (separate query)
+    const today = new Date().toISOString().split('T')[0];
+    const { data: weatherData } = await supabase
+      .from('weather_forecast')
+      .select('forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, precipitation_sum, precipitation_probability, sunrise, sunset, rain_volume, snow_volume')
+      .eq('place_id', placeId)
+      .gte('forecast_date', today)
+      .order('forecast_date', { ascending: true })
+      .limit(1);
+    
+    const weather = weatherData?.[0] || {};
+    const flatPlace = {
+      id: place.id,
+      name: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      country_code: place.country_code,
+      place_type: place.place_type,
+      place_category: place.place_type,
+      population: place.population,
+      attractiveness_score: place.attractiveness_score,
+      temperature: weather.temp_max ? Math.round(weather.temp_max) : null, // Always use MAX temp!
+      temp_min: weather.temp_min,
+      temp_max: weather.temp_max,
+      weather_main: weather.weather_main,
+      weather_description: weather.weather_description,
+      weather_icon: weather.weather_icon,
+      wind_speed: weather.wind_speed,
+      rain_1h: weather.rain_volume,
+      snow_1h: weather.snow_volume,
+    };
 
-    // Get 16-day forecast
+    // Get 16-day forecast (using forecast_date)
     const { data: forecast, error: forecastError } = await supabase
       .from('weather_forecast')
       .select(`
-        forecast_timestamp, temp_min, temp_max,
+        forecast_date, temp_min, temp_max,
         precipitation_sum, rain_volume, precipitation_probability, rain_probability,
-        wind_speed_max, wind_speed,
+        wind_speed,
         weather_main, weather_icon, weather_description
       `)
       .eq('place_id', placeId)
-      .gte('forecast_timestamp', new Date().toISOString())
-      .order('forecast_timestamp', { ascending: true })
+      .gte('forecast_date', today)
+      .order('forecast_date', { ascending: true })
       .limit(16);
 
     if (forecastError) console.warn('Forecast fetch failed:', forecastError);
 
     return {
-      place: adaptPlaceToDestination(place),
+      place: adaptPlaceToDestination(flatPlace, locale),
       forecast: (forecast || []).map(adaptForecastEntry),
       error: null,
     };
@@ -244,27 +409,55 @@ export const getPlaceDetail = async (placeId) => {
  * Search places by name
  * @param {string} searchTerm - Search term
  * @param {number} limit - Max results (default 20)
+ * @param {string} locale - Locale for translations (e.g. 'de', 'en')
  * @returns {Promise<{places, error}>}
  */
-export const searchPlacesByName = async (searchTerm, limit = 20) => {
+export const searchPlacesByName = async (searchTerm, limit = 20, locale = 'en') => {
   try {
     const { data, error } = await supabase
-      .from('places_with_latest_weather')
+      .from('places')
       .select(`
-        id, name, latitude, longitude, country_code, region,
-        place_category, population, attractiveness_score,
-        temperature, feels_like, humidity, wind_speed, wind_gust,
-        cloud_cover, rain_1h, rain_3h, snow_1h, snow_3h, snow_24h,
-        weather_main, weather_description, weather_icon,
-        weather_timestamp, data_source,
-        stability_score, weather_trend
+        id, name, latitude, longitude, country_code,
+        place_type, population, attractiveness_score,
+        weather_forecast(
+          forecast_date, temp_min, temp_max,
+          weather_main, weather_description, weather_icon,
+          wind_speed, rain_volume, snow_volume
+        )
       `)
+      .eq('is_active', true)
       .ilike('name', `%${searchTerm}%`)
+      .eq('weather_forecast.forecast_date', new Date().toISOString().split('T')[0])
       .limit(limit);
 
     if (error) throw error;
 
-    const adaptedPlaces = (data || []).map(place => adaptPlaceToDestination(place));
+    // Transform nested data
+    const places = (data || []).map(place => {
+      const weather = place.weather_forecast?.[0] || {};
+      return {
+        id: place.id,
+        name: place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        country_code: place.country_code,
+        place_type: place.place_type,
+        place_category: place.place_type,
+        population: place.population,
+        attractiveness_score: place.attractiveness_score,
+        temperature: weather.temp_max ? Math.round(weather.temp_max) : null,
+        temp_min: weather.temp_min,
+        temp_max: weather.temp_max,
+        weather_main: weather.weather_main,
+        weather_description: weather.weather_description,
+        weather_icon: weather.weather_icon,
+        wind_speed: weather.wind_speed,
+        rain_1h: weather.rain_volume,
+        snow_1h: weather.snow_volume,
+      };
+    });
+
+    const adaptedPlaces = places.map(place => adaptPlaceToDestination(place, locale));
 
     return { places: adaptedPlaces, error: null };
   } catch (error) {
@@ -315,7 +508,7 @@ function toRadians(degrees) {
 /**
  * Adapt place + weather to destination format used by app
  */
-function adaptPlaceToDestination(place) {
+function adaptPlaceToDestination(place, locale = 'en') {
   // Map weather_main to app condition
   const condition = mapWeatherMainToCondition(place.weather_main);
 
@@ -325,10 +518,10 @@ function adaptPlaceToDestination(place) {
     lat: place.latitude,
     lon: place.longitude,
     name: place.name,
-    country: getCountryName(place.country_code),
+    country: getCountryName(place.country_code, locale),
     countryCode: place.country_code,
+    country_code: place.country_code, // Also include as country_code for compatibility
     countryFlag: getCountryFlag(place.country_code),
-    region: place.region,
     
     // Weather data (from database)
     condition,
@@ -362,6 +555,9 @@ function adaptPlaceToDestination(place) {
     
     // Distance (filled in by getPlacesWithWeather if applicable)
     distance: place.distance || null,
+    
+    // Multi-day forecast for badge calculation!
+    forecast: place.forecast || null,
     
     // Future: badges will be calculated based on weather + place attributes
     badges: [],
@@ -413,8 +609,8 @@ function calculateStability(place) {
  */
 function adaptForecastEntry(entry) {
   return {
-    timestamp: entry.forecast_timestamp,
-    date: new Date(entry.forecast_timestamp).toLocaleDateString('en-US', {
+    timestamp: entry.forecast_date, // Using forecast_date now
+    date: new Date(entry.forecast_date + 'T12:00:00Z').toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -424,7 +620,7 @@ function adaptForecastEntry(entry) {
     tempMax: entry.temp_max ? Math.round(entry.temp_max) : null,
     precipitation: entry.precipitation_sum || entry.rain_volume || 0,
     precipitationProbability: entry.precipitation_probability || entry.rain_probability,
-    windSpeed: entry.wind_speed_max || entry.wind_speed ? Math.round(entry.wind_speed_max || entry.wind_speed) : null,
+    windSpeed: entry.wind_speed ? Math.round(entry.wind_speed) : null,
     weatherMain: entry.weather_main,
     weatherIcon: entry.weather_icon,
     weatherDescription: fixWeatherCodeDescription(entry.weather_description),
