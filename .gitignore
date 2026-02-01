@@ -25,3 +25,4 @@ allCountries.zip
 filtered_pois.txt
 tr_ma_tn_cities.txt
 *.zip
+.git-backup/
