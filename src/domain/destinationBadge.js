@@ -176,8 +176,10 @@ export function calculateWorthTheDrive(destination, origin, distanceKm) {
   const MIN_TEMP_ABSOLUTE = 4; // Destination must be at least 4°C (not freezing!)
   const MIN_TEMP_DELTA = 5; // Destination must be MUCH warmer (+5°C minimum)
   const MIN_VALUE = 2.5; // Must have good value (at least 2.5 pts per hour)
+  const MIN_DISTANCE_KM = 30; // Must be at least 30km away (otherwise not "worth the drive")
   
   const shouldAward = (
+    distanceKm >= MIN_DISTANCE_KM && // Far enough to be "worth the drive"
     weatherDest >= MIN_WEATHER_SCORE &&
     delta >= MIN_DELTA &&
     value >= MIN_VALUE && // Must have meaningful value
@@ -229,6 +231,7 @@ export function calculateWorthTheDriveBudget(destination, origin, distanceKm) {
   const MIN_TEMP_DELTA = 3; // At least 3°C warmer
   const MIN_TEMP_ABSOLUTE = 10; // At least 10°C (not freezing)
   const MIN_DISTANCE = 1; // Avoid division by zero
+  const MIN_DISTANCE_KM = 30; // Must be at least 30km away
   
   // Efficiency = temp gain per km (for ranking)
   const efficiency = tempDelta / Math.max(distanceKm, MIN_DISTANCE);
@@ -236,8 +239,8 @@ export function calculateWorthTheDriveBudget(destination, origin, distanceKm) {
   // Value = for display (temp gain per 100km, like before)
   const value = tempDelta / (distanceKm / 100);
   
-  // Eligible if warmer and not freezing
-  const isEligible = tempDelta >= MIN_TEMP_DELTA && tempDest >= MIN_TEMP_ABSOLUTE;
+  // Eligible if warmer, not freezing, and far enough
+  const isEligible = distanceKm >= MIN_DISTANCE_KM && tempDelta >= MIN_TEMP_DELTA && tempDest >= MIN_TEMP_ABSOLUTE;
   
   return {
     efficiency: Math.round(efficiency * 1000) / 1000, // 3 decimals
@@ -255,6 +258,7 @@ export function calculateWorthTheDriveBudget(destination, origin, distanceKm) {
 /**
  * Calculate "Warm & Dry" eligibility
  * Awards badge to warmest destinations with good conditions (no rain, low wind)
+ * NOW CHECKS FORECAST: Must be dry for at least 2 out of next 3 days!
  * 
  * @param {Object} destination - Destination to evaluate
  * @param {Array} allDestinations - All destinations for comparison
@@ -264,18 +268,46 @@ export function calculateWarmAndDry(destination, allDestinations) {
   const temp = destination.temperature ?? 0;
   const condition = destination.condition ?? 'unknown';
   const windSpeed = destination.windSpeed ?? 0;
-  const precipitation = destination.precipitation ?? 0; // Precipitation probability (0-100%)
+  const precipitation = destination.precipitation ?? 0;
+  const forecast = destination.forecast;
   
-  // Criteria (Updated)
+  // Criteria
   const MIN_TEMP = 18; // Must be at least 18°C (pleasantly warm)
   const MAX_WIND = 30; // Max wind speed in km/h
-  const MAX_PRECIPITATION = 30; // Max 30% precipitation probability
   const BAD_CONDITIONS = ['rainy', 'snowy']; // Conditions that disqualify
   
-  // Check conditions
+  // Check today's conditions
   const isWarm = temp >= MIN_TEMP;
-  const isDry = !BAD_CONDITIONS.includes(condition) && precipitation < MAX_PRECIPITATION;
+  const isTodayDry = !BAD_CONDITIONS.includes(condition);
   const isCalm = windSpeed <= MAX_WIND;
+  
+  // Helper to check if a day is rainy
+  const isDayRainy = (dayForecast) => {
+    if (!dayForecast) return false;
+    const dayCondition = (dayForecast.condition || '').toLowerCase();
+    const dayDesc = (dayForecast.description || '').toLowerCase();
+    return dayCondition === 'rainy' || 
+           dayCondition === 'snowy' ||
+           dayDesc.includes('rain') || 
+           dayDesc.includes('drizzle') ||
+           dayDesc.includes('thunder') ||
+           dayDesc.includes('snow');
+  };
+  
+  // Check forecast for next 3 days - must be mostly dry!
+  let forecastRainyDays = 0;
+  
+  if (forecast) {
+    // Forecast structure: { today, tomorrow, day2, day3 }
+    if (isDayRainy(forecast.today)) forecastRainyDays++;
+    if (isDayRainy(forecast.tomorrow)) forecastRainyDays++;
+    if (isDayRainy(forecast.day2)) forecastRainyDays++;
+    if (isDayRainy(forecast.day3)) forecastRainyDays++;
+  }
+  
+  // Must have max 1 rainy day in forecast (3 out of 4 dry)
+  const isForecastDry = forecastRainyDays <= 1;
+  const isDry = isTodayDry && isForecastDry;
   
   // Rank by temperature among all destinations (for display purposes)
   const sortedByTemp = [...allDestinations]
@@ -288,10 +320,18 @@ export function calculateWarmAndDry(destination, allDestinations) {
   // Award to ALL destinations that meet the criteria (no rank limit)
   const shouldAward = isWarm && isDry && isCalm;
   
+  // Debug logging for places that almost qualify
+  if (isWarm && isCalm && !isDry) {
+    console.log(`❌ ${destination.name}: Warm & Calm but NOT dry! ` +
+      `Today: ${condition}, Forecast rainy days: ${forecastRainyDays}/3`);
+  }
+  
   return {
     isWarm,
     isDry,
     isCalm,
+    isForecastDry,
+    forecastRainyDays,
     shouldAward,
     tempRank,
     temp,
@@ -311,14 +351,19 @@ export function calculateBeachParadise(destination) {
   const temp = destination.temperature ?? 0;
   const condition = destination.condition ?? 'unknown';
   const windSpeed = destination.windSpeed ?? 0;
+  const placeType = destination.place_type || destination.place_category || '';
   
-  // Perfect beach criteria (Updated)
-  const MIN_TEMP = 20; // Realistic beach temperature
-  const MAX_TEMP = 35; // Still comfortable for beach
-  const GOOD_CONDITIONS = ['sunny', 'cloudy']; // Dry weather
-  const MAX_WIND = 25; // Light to moderate breeze (normal at beach)
+  // ONLY beaches get this badge!
+  const isBeach = placeType === 'beach';
+  
+  // Perfect beach criteria
+  const MIN_TEMP = 20;
+  const MAX_TEMP = 35;
+  const GOOD_CONDITIONS = ['sunny', 'cloudy'];
+  const MAX_WIND = 25;
   
   const shouldAward = (
+    isBeach && // MUST be place_type = 'beach'!
     temp >= MIN_TEMP &&
     temp <= MAX_TEMP &&
     GOOD_CONDITIONS.includes(condition) &&
@@ -327,6 +372,7 @@ export function calculateBeachParadise(destination) {
   
   return {
     shouldAward,
+    isBeach,
     temp,
     condition,
     windSpeed,
@@ -342,23 +388,27 @@ export function calculateBeachParadise(destination) {
  */
 export function calculateSunnyStreak(destination) {
   const currentCondition = destination.condition ?? 'unknown';
-  const forecast = destination.forecast;
+  const sunshineDuration = destination.sunshine_duration ?? 0; // seconds of sunshine today
+  const temp = destination.temperature ?? 0;
   
-  let sunnyDays = currentCondition === 'sunny' ? 1 : 0;
+  // sunshine_duration > 28800 = more than 8 hours of sun
+  const MIN_SUNSHINE_SECONDS = 28800; // 8 hours
+  const MIN_TEMP = 10; // At least 10°C
   
-  if (forecast) {
-    if (forecast.today?.condition === 'sunny') sunnyDays++;
-    if (forecast.tomorrow?.condition === 'sunny') sunnyDays++;
-    if (forecast.day3?.condition === 'sunny') sunnyDays++;
-  }
+  const isSunny = currentCondition === 'sunny';
+  const hasLongSunshine = sunshineDuration >= MIN_SUNSHINE_SECONDS;
+  const isWarmEnough = temp >= MIN_TEMP;
   
-  // Badge criteria: 3+ sunny days
-  const MIN_SUNNY_DAYS = 3;
-  const shouldAward = sunnyDays >= MIN_SUNNY_DAYS;
+  // Badge: Sunny condition + 8+ hours sunshine + warm enough
+  const shouldAward = isSunny && hasLongSunshine && isWarmEnough;
+  
+  const sunshineHours = Math.round(sunshineDuration / 3600 * 10) / 10;
   
   return {
     shouldAward,
-    sunnyDays,
+    sunshineHours,
+    condition: currentCondition,
+    temp,
   };
 }
 
@@ -652,6 +702,16 @@ export function calculateWeatherCurse(destination) {
     (tomorrowBad || day3Bad) &&
     tempLoss >= MIN_TEMP_LOSS
   );
+  
+  // Debug logging for Weather Curse candidates
+  if (isGoodToday && (tomorrowBad || day3Bad)) {
+    console.log(`🔮 ${destination.name}: Weather Curse candidate! ` +
+      `Today: ${todayCondition} ${todayTemp}°C, ` +
+      `Tomorrow: ${forecast.tomorrow?.condition || 'N/A'} ${tomorrowTemp}°C, ` +
+      `Day3: ${forecast.day3?.condition || 'N/A'} ${day3Temp}°C, ` +
+      `TempLoss: ${tempLoss}°C (need ${MIN_TEMP_LOSS}°C) → ${shouldAward ? '✅ AWARD' : '❌ NOT ENOUGH TEMP LOSS'}`
+    );
+  }
   
   return {
     shouldAward,

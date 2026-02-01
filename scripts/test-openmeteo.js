@@ -125,7 +125,6 @@ async function saveWeatherData(placeId, current, daily) {
   const record = {
     place_id: placeId,
     forecast_date: today,
-    forecast_timestamp: new Date(current.time).toISOString(),
     fetched_at: fetchedAt,
     temp_min: daily.temperature_2m_min[0], // Today's min from daily forecast
     temp_max: daily.temperature_2m_max[0], // Today's max from daily forecast
@@ -161,7 +160,6 @@ async function saveForecast(placeId, daily) {
     return {
       place_id: placeId,
       forecast_date: time, // Already in YYYY-MM-DD format from API
-      forecast_timestamp: new Date(time).toISOString(),
       fetched_at: fetchedAt,
       temp_min: daily.temperature_2m_min[actualIndex],
       temp_max: daily.temperature_2m_max[actualIndex],
@@ -236,12 +234,11 @@ async function main() {
   console.log('╚═══════════════════════════════════════════════════╝\n');
 
   // 1. Get 10 test locations (use simple query without ordering to avoid timeout)
-  console.log('📍 Fetching 10 test places (excluding to_remove=true)...');
+  console.log('📍 Fetching 10 test places...');
   const { data: places, error } = await supabase
     .from('places')
     .select('id, name, latitude, longitude, country_code')
     .eq('is_active', true)
-    .or('to_remove.eq.false,to_remove.is.null') // Only places NOT marked for removal
     .limit(10);
 
   if (error) {

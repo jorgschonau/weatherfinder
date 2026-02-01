@@ -11,6 +11,24 @@
 -- ============================================================================
 
 -- ============================================================================
+-- STEP 0: Add to_remove column to places (if not exists)
+-- ============================================================================
+
+ALTER TABLE places 
+  ADD COLUMN IF NOT EXISTS to_remove BOOLEAN DEFAULT false;
+
+-- Index for fast filtering (partial index for true values only)
+CREATE INDEX IF NOT EXISTS places_to_remove_idx ON places(to_remove) WHERE to_remove = true;
+
+-- Also need index for is_active + to_remove combo (most common query)
+CREATE INDEX IF NOT EXISTS places_active_not_removed_idx ON places(is_active, to_remove) 
+  WHERE is_active = true AND (to_remove = false OR to_remove IS NULL);
+
+UPDATE places 
+SET to_remove = false 
+WHERE to_remove IS NULL;
+
+-- ============================================================================
 -- STEP 1: Drop views that depend on weather_data
 -- ============================================================================
 
@@ -96,7 +114,7 @@ SELECT
   -- Weather data (from forecast table)
   w.forecast_date,
   w.forecast_timestamp,
-  w.temp_min AS temperature, -- Use temp_min as "current" temp
+  ROUND((w.temp_min + w.temp_max) / 2.0, 1) AS temperature, -- Average of min/max
   w.temp_min,
   w.temp_max,
   w.weather_main,
@@ -133,7 +151,7 @@ LEFT JOIN LATERAL (
   LIMIT 1
 ) w ON true
 WHERE p.is_active = true
-  AND (p.to_remove = false OR p.to_remove IS NULL); -- Exclude places marked for removal
+  AND COALESCE(p.to_remove, false) = false; -- Exclude places marked for removal (faster than OR)
 
 -- ============================================================================
 -- STEP 7: Create function to get weather for specific date
@@ -209,7 +227,7 @@ BEGIN
     LIMIT 1
   ) w ON true
   WHERE p.is_active = true
-    AND (p.to_remove = false OR p.to_remove IS NULL); -- Exclude places marked for removal
+    AND COALESCE(p.to_remove, false) = false; -- Exclude places marked for removal (faster than OR)
 END;
 $$ LANGUAGE plpgsql STABLE;
 
@@ -230,7 +248,7 @@ SELECT
   
   -- Current weather (from forecast table, today)
   w.forecast_date,
-  w.temp_min AS temperature,
+  ROUND((w.temp_min + w.temp_max) / 2.0, 1) AS temperature, -- Average of min/max
   w.temp_max,
   w.weather_main,
   w.weather_description,

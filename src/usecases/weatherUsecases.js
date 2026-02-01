@@ -68,19 +68,104 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     );
   }
   
-  // Limit "Worth the Drive" to top 3 by temperature
+  // Limit "Worth the Drive" to top 3 by temperature, with MIN 20km distance between badges
   // EXCLUDE destinations that already have Budget badge!
+  const MIN_BADGE_DISTANCE_KM = 20;
   const worthTheDriveCandidates = destinations
     .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE') && !d.badges.includes('WORTH_THE_DRIVE_BUDGET'))
     .sort((a, b) => (b._worthTheDriveData?.tempDest || 0) - (a._worthTheDriveData?.tempDest || 0));
   
-  if (worthTheDriveCandidates.length > MAX_WORTH_THE_DRIVE_BADGES) {
-    worthTheDriveCandidates.slice(MAX_WORTH_THE_DRIVE_BADGES).forEach(dest => {
+  // Greedy selection: pick top candidates that are at least 20km apart
+  const selectedWorthBadges = [];
+  for (const candidate of worthTheDriveCandidates) {
+    if (selectedWorthBadges.length >= MAX_WORTH_THE_DRIVE_BADGES) break;
+    
+    // Check distance to already selected badges
+    const tooClose = selectedWorthBadges.some(selected => {
+      const dist = getDistanceKm(
+        candidate.lat || candidate.latitude,
+        candidate.lon || candidate.longitude,
+        selected.lat || selected.latitude,
+        selected.lon || selected.longitude
+      );
+      return dist < MIN_BADGE_DISTANCE_KM;
+    });
+    
+    if (!tooClose) {
+      selectedWorthBadges.push(candidate);
+    }
+  }
+  
+  // Remove badge from non-selected candidates
+  worthTheDriveCandidates.forEach(dest => {
+    if (!selectedWorthBadges.includes(dest)) {
       dest.badges = dest.badges.filter(b => b !== 'WORTH_THE_DRIVE');
+    }
+  });
+  
+  // Helper: Score by temp + attractiveness
+  const getScore = (d, tempAsc = false) => {
+    const temp = d.temperature || 0;
+    const attr = d.attractivenessScore || d.attractiveness_score || 0;
+    return (tempAsc ? -temp : temp) + attr * 0.5;
+  };
+  
+  const MAX_OTHER_BADGES = 10;
+  
+  // Limit Beach Paradise: max 10, by temp + attractiveness
+  const beachCandidates = destinations
+    .filter(d => d.badges?.includes('BEACH_PARADISE'))
+    .sort((a, b) => getScore(b) - getScore(a));
+  if (beachCandidates.length > MAX_OTHER_BADGES) {
+    beachCandidates.slice(MAX_OTHER_BADGES).forEach(d => {
+      d.badges = d.badges.filter(b => b !== 'BEACH_PARADISE');
     });
   }
   
-  // Other badges: NO LIMIT (Warm & Dry, Beach Paradise, Sunny Streak, Weather Miracle, Heatwave, Snow King)
+  // Limit Sunny Streak: max 10, by temp + attractiveness + 20km apart
+  const MIN_SUNNY_DISTANCE_KM = 20;
+  let sunnyCandidates = destinations
+    .filter(d => d.badges?.includes('SUNNY_STREAK'))
+    .sort((a, b) => getScore(b) - getScore(a));
+  
+  // Select top 10 with minimum distance
+  const selectedSunny = [];
+  for (const candidate of sunnyCandidates) {
+    if (selectedSunny.length >= MAX_OTHER_BADGES) break;
+    
+    const tooClose = selectedSunny.some(sel => {
+      const dist = getDistanceKm(
+        candidate.lat || candidate.latitude,
+        candidate.lon || candidate.longitude,
+        sel.lat || sel.latitude,
+        sel.lon || sel.longitude
+      );
+      return dist < MIN_SUNNY_DISTANCE_KM;
+    });
+    
+    if (!tooClose) {
+      selectedSunny.push(candidate);
+    }
+  }
+  
+  // Remove badge from all non-selected
+  sunnyCandidates.forEach(d => {
+    if (!selectedSunny.includes(d)) {
+      d.badges = d.badges.filter(b => b !== 'SUNNY_STREAK');
+    }
+  });
+  
+  console.log(`☀️ Sunny Streak: ${sunnyCandidates.length} → ${selectedSunny.length} (max 10, min 20km apart)`);
+  
+  // Limit Snow King: max 10, by COLDEST temp (min) + attractiveness
+  const snowCandidates = destinations
+    .filter(d => d.badges?.includes('SNOW_KING'))
+    .sort((a, b) => getScore(b, true) - getScore(a, true)); // tempAsc = true (coldest first)
+  if (snowCandidates.length > MAX_OTHER_BADGES) {
+    snowCandidates.slice(MAX_OTHER_BADGES).forEach(d => {
+      d.badges = d.badges.filter(b => b !== 'SNOW_KING');
+    });
+  }
   
   const destWithBadges = destinations.filter(d => d.badges && d.badges.length > 0);
   const totalBadges = destWithBadges.reduce((sum, d) => sum + d.badges.length, 0);
@@ -96,26 +181,29 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
   console.log(
     `🏆 Awarded ${totalBadges} badges to ${destWithBadges.length} destinations:\n` +
     `  💰 Budget: ${budgetCount}/${budgetCandidates.length} (TOP 1 ONLY)\n` +
-    `  🚗 Worth: ${worthCount}/${worthTheDriveCandidates.length} (limited to 3)\n` +
+    `  🚗 Worth: ${worthCount}/${worthTheDriveCandidates.length} (max 3, min 20km apart)\n` +
     `  ☀️ Warm&Dry: ${warmDryCount} (unlimited)\n` +
-    `  🌊 Beach: ${beachCount} (unlimited)\n` +
-    `  ☀️ Sunny: ${sunnyCount} (unlimited)\n` +
+    `  🌊 Beach: ${beachCount}/${beachCandidates.length} (max 10)\n` +
+    `  ☀️ Sunny: ${sunnyCount}/${sunnyCandidates.length} (max 10)\n` +
     `  🌈 Miracle: ${miracleCount} (unlimited)\n` +
     `  🔥 Heatwave: ${heatwaveCount} (unlimited)\n` +
-    `  ⛄ Snow: ${snowCount} (unlimited)`
+    `  ⛄ Snow: ${snowCount}/${snowCandidates.length} (max 10, coldest)`
   );
 };
 
 /**
  * Use-case: get destinations for a radius, optionally filtered by desiredCondition.
  * NOW USES REAL DATA FROM SUPABASE via placesWeatherService!
+ * @param originTemp - Optional: temperature at origin for badge calculation
+ * @param locale - Locale for translations (e.g. 'de', 'en')
  */
-export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCondition = null) => {
+export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCondition = null, originTemp = null, locale = 'en') => {
   // Fetch real places with weather data from Supabase
   const { places, error } = await getPlacesWithWeather({
     userLat,
     userLon,
     radiusKm,
+    locale,
   });
 
   if (error) {
@@ -132,18 +220,16 @@ export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCon
 
   console.log(`🔍 After filter: ${filteredPlaces.length} places`);
 
-  // LIMIT based on radius for performance
-  // Small radius: fewer places needed (they're close together)
-  // Large radius: more places needed (they're spread out)
+  // HÖHERE LIMITS - mehr Orte auf der Karte!
   let MAX_PLACES_ON_MAP;
   if (radiusKm <= 400) {
-    MAX_PLACES_ON_MAP = 100;
+    MAX_PLACES_ON_MAP = 500;   // War 100
   } else if (radiusKm <= 800) {
-    MAX_PLACES_ON_MAP = 300;
+    MAX_PLACES_ON_MAP = 1000;  // War 300
   } else if (radiusKm <= 1500) {
-    MAX_PLACES_ON_MAP = 1000;
+    MAX_PLACES_ON_MAP = 2000;  // War 1000
   } else {
-    MAX_PLACES_ON_MAP = 3000; // Large radius: show MANY places
+    MAX_PLACES_ON_MAP = 5000;  // War 3000
   }
   
   if (filteredPlaces.length > MAX_PLACES_ON_MAP) {
@@ -152,17 +238,33 @@ export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCon
   }
 
   // Find user's current location weather for badge calculation
-  const currentLocationWeather = filteredPlaces.find(p => p.distance === 0 || p.isCurrentLocation) || {
-    lat: userLat,
-    lon: userLon,
-    temperature: filteredPlaces.length > 0 ? Math.min(...filteredPlaces.map(p => p.temperature || 15)) : 15,
-    condition: 'cloudy',
-    stability: 50,
-    windSpeed: 10,
-    humidity: 50,
-    name: 'Your Location',
-    isCurrentLocation: true,
-  };
+  // Look for center point or current location marker
+  let currentLocationWeather = filteredPlaces.find(p => 
+    p.distance === 0 || p.isCurrentLocation || p.isCenterPoint
+  );
+  
+  // If not found, create fallback with passed originTemp or average
+  if (!currentLocationWeather) {
+    const fallbackTemp = originTemp !== null 
+      ? originTemp 
+      : (filteredPlaces.length > 0 
+          ? Math.round(filteredPlaces.reduce((sum, p) => sum + (p.temperature || 15), 0) / filteredPlaces.length)
+          : 15);
+    
+    currentLocationWeather = {
+      lat: userLat,
+      lon: userLon,
+      temperature: fallbackTemp,
+      condition: 'cloudy',
+      stability: 50,
+      windSpeed: 10,
+      humidity: 50,
+      name: 'Your Location',
+      isCurrentLocation: true,
+    };
+  }
+  
+  console.log(`🎯 Badge origin: ${currentLocationWeather.name} at ${currentLocationWeather.temperature}°C`);
 
   // Apply badges to all destinations
   applyBadgesToDestinations(filteredPlaces, currentLocationWeather, userLat, userLon);

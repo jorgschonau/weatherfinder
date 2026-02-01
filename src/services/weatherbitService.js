@@ -209,7 +209,7 @@ const saveForecastData = async (placeId, forecastArray) => {
   
   const records = forecastArray.map(day => ({
     place_id: placeId,
-    forecast_timestamp: new Date(day.ts * 1000).toISOString(),
+    forecast_date: new Date(day.ts * 1000).toISOString().split('T')[0], // YYYY-MM-DD
     fetched_at: fetchedAt,
     
     temperature: day.temp,
@@ -239,7 +239,7 @@ const saveForecastData = async (placeId, forecastArray) => {
 
   await supabase
     .from('weather_forecast')
-    .upsert(records, { onConflict: 'place_id,forecast_timestamp,fetched_at' });
+    .upsert(records, { onConflict: 'place_id,forecast_date' });
 };
 
 /**

@@ -248,7 +248,7 @@ async function saveForecast(placeId, placeName, daily) {
     
     const records = daily.time.map((time, i) => ({
       place_id: placeId,
-      forecast_timestamp: new Date(time).toISOString(),
+      forecast_date: time, // Use forecast_date instead of timestamp
       fetched_at: fetchedAt,
       
       // Temperature

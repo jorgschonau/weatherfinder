@@ -146,7 +146,7 @@ const saveForecastData = async (placeId, forecastData) => {
   
   const records = forecastData.time.map((time, i) => ({
     place_id: placeId,
-    forecast_timestamp: new Date(time).toISOString(),
+    forecast_date: time, // Already YYYY-MM-DD from Open-Meteo API
     fetched_at: fetchedAt,
     
     // Temperature
@@ -179,7 +179,7 @@ const saveForecastData = async (placeId, forecastData) => {
 
   await supabase
     .from('weather_forecast')
-    .upsert(records, { onConflict: 'place_id,forecast_timestamp,fetched_at' });
+    .upsert(records, { onConflict: 'place_id,forecast_date' });
 };
 
 /**

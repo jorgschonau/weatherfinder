@@ -16,9 +16,10 @@ import { openInMaps, NavigationProvider } from '../../usecases/navigationUsecase
 import { getPlaceDetail } from '../../services/placesWeatherService';
 import { toggleFavourite, isDestinationFavourite } from '../../usecases/favouritesUsecases';
 import { BadgeMetadata } from '../../domain/destinationBadge';
+import { getCountryName } from '../../utils/countryNames';
 
 const DestinationDetailScreen = ({ route, navigation }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { theme } = useTheme();
   const { destination } = route.params;
   
@@ -27,6 +28,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
   const [forecast, setForecast] = useState(null);
   const [isFavourite, setIsFavourite] = useState(false);
   const [favouriteLoading, setFavouriteLoading] = useState(false);
+  const [expandedBadges, setExpandedBadges] = useState({});
 
   const loadForecast = async () => {
     try {
@@ -35,7 +37,34 @@ const DestinationDetailScreen = ({ route, navigation }) => {
       
       // If destination already has all forecast data (mock data or complete data), use it directly
       if (destination.forecast) {
-        setForecast(destination);
+        // Ensure forecast has the expected structure with high/low
+        const normalizedForecast = {
+          today: destination.forecast.today ? {
+            ...destination.forecast.today,
+            high: destination.forecast.today.high ?? Math.round(destination.forecast.today.temp || destination.temperature || 0),
+            low: destination.forecast.today.low ?? Math.round((destination.forecast.today.temp || destination.temperature || 0) - 3),
+          } : { condition: destination.condition, high: destination.temperature, low: destination.temperature - 3 },
+          tomorrow: destination.forecast.tomorrow ? {
+            ...destination.forecast.tomorrow,
+            high: destination.forecast.tomorrow.high ?? Math.round(destination.forecast.tomorrow.temp || 0),
+            low: destination.forecast.tomorrow.low ?? Math.round((destination.forecast.tomorrow.temp || 0) - 3),
+          } : null,
+          day3: destination.forecast.day3 || destination.forecast.day2 ? {
+            ...(destination.forecast.day3 || destination.forecast.day2),
+            high: (destination.forecast.day3?.high || destination.forecast.day2?.high) ?? Math.round((destination.forecast.day3?.temp || destination.forecast.day2?.temp || 0)),
+            low: (destination.forecast.day3?.low || destination.forecast.day2?.low) ?? Math.round((destination.forecast.day3?.temp || destination.forecast.day2?.temp || 0) - 3),
+          } : null,
+        };
+        
+        setForecast({
+          ...destination,
+          // Ensure all required fields are present
+          description: destination.description || destination.weatherDescription || `${destination.condition} conditions`,
+          countryCode: destination.countryCode || destination.country_code,
+          country_code: destination.country_code || destination.countryCode,
+          country: destination.country,
+          forecast: normalizedForecast,
+        });
         setIsLoading(false);
         return;
       }
@@ -43,7 +72,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
       // Fetch from Supabase if destination has an ID
       if (destination.id) {
         try {
-          const { place, forecast: forecastData, error: fetchError } = await getPlaceDetail(destination.id);
+          const { place, forecast: forecastData, error: fetchError } = await getPlaceDetail(destination.id, i18n.language);
           
           if (fetchError || !place) {
             throw new Error(fetchError || 'Failed to fetch place detail');
@@ -118,6 +147,9 @@ const DestinationDetailScreen = ({ route, navigation }) => {
       // Fallback: Use destination data with generated forecast
       setForecast({
         ...destination,
+        description: destination.description || destination.weatherDescription || `${destination.condition} conditions`,
+        countryCode: destination.countryCode || destination.country_code,
+        country_code: destination.country_code || destination.countryCode,
         forecast: {
           today: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
           tomorrow: { condition: destination.condition, temp: destination.temperature + 1, high: destination.temperature + 4, low: destination.temperature - 2 },
@@ -244,24 +276,45 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     
     // First, fix any legacy "Weather code XX" entries
     const fixedDesc = fixWeatherCodeDescription(description);
+    
+    // Try direct translation from weather.descriptions (exact match)
+    const directTranslation = t(`weather.descriptions.${fixedDesc}`, { defaultValue: null });
+    if (directTranslation && directTranslation !== `weather.descriptions.${fixedDesc}`) {
+      return directTranslation;
+    }
+    
     const desc = fixedDesc.toLowerCase();
     
     // Map English conditions to translation keys
-    if (desc.includes('clear')) return t('weather.conditions.clearSky');
+    if (desc.includes('mainly clear')) return t('weather.conditions.mainlyClear');
+    if (desc.includes('partly cloudy')) return t('weather.conditions.partlyCloudy');
+    if (desc === 'clear sky' || desc === 'clear') return t('weather.conditions.clearSky');
     if (desc.includes('few clouds')) return t('weather.conditions.fewClouds');
     if (desc.includes('scattered clouds')) return t('weather.conditions.scatteredClouds');
     if (desc.includes('broken clouds')) return t('weather.conditions.brokenClouds');
-    if (desc.includes('overcast')) return t('weather.conditions.overcastClouds');
-    if (desc.includes('light rain') || desc.includes('slight rain')) return t('weather.conditions.lightRain');
+    if (desc.includes('overcast')) return t('weather.conditions.overcast');
+    if (desc.includes('foggy') || desc.includes('rime fog')) return t('weather.conditions.foggy');
+    if (desc.includes('freezing drizzle')) return t('weather.conditions.lightFreezingDrizzle');
+    if (desc.includes('dense drizzle')) return t('weather.conditions.denseDrizzle');
+    if (desc.includes('light drizzle')) return t('weather.conditions.lightDrizzle');
+    if (desc.includes('moderate drizzle')) return t('weather.conditions.moderateDrizzle');
+    if (desc.includes('drizzle')) return t('weather.conditions.drizzle');
+    if (desc.includes('freezing rain')) return t('weather.conditions.lightFreezingRain');
+    if (desc.includes('violent rain') || desc.includes('heavy rain showers')) return t('weather.conditions.violentRainShowers');
+    if (desc.includes('moderate rain showers')) return t('weather.conditions.moderateRainShowers');
+    if (desc.includes('slight rain showers') || desc.includes('light rain showers')) return t('weather.conditions.slightRainShowers');
+    if (desc.includes('light rain') || desc.includes('slight rain')) return t('weather.conditions.slightRain');
     if (desc.includes('moderate rain')) return t('weather.conditions.moderateRain');
     if (desc.includes('heavy rain') || desc.includes('intense rain')) return t('weather.conditions.heavyRain');
-    if (desc.includes('rain showers')) return t('weather.conditions.lightRain'); // Rain showers
-    if (desc.includes('light snow') || desc.includes('slight snow')) return t('weather.conditions.lightSnow');
+    if (desc.includes('snow grains')) return t('weather.conditions.snowGrains');
+    if (desc.includes('heavy snow showers')) return t('weather.conditions.heavySnowShowers');
+    if (desc.includes('slight snow showers') || desc.includes('light snow showers')) return t('weather.conditions.slightSnowShowers');
+    if (desc.includes('light snow') || desc.includes('slight snow')) return t('weather.conditions.slightSnow');
     if (desc.includes('moderate snow')) return t('weather.conditions.moderateSnow');
     if (desc.includes('heavy snow') || desc.includes('intense snow')) return t('weather.conditions.heavySnow');
-    if (desc.includes('snow showers')) return t('weather.conditions.lightSnow'); // Snow showers
     if (desc.includes('sleet')) return t('weather.conditions.sleet');
-    if (desc.includes('drizzle')) return t('weather.conditions.drizzle');
+    if (desc.includes('thunderstorm') && desc.includes('heavy hail')) return t('weather.conditions.thunderstormHeavyHail');
+    if (desc.includes('thunderstorm') && desc.includes('hail')) return t('weather.conditions.thunderstormSlightHail');
     if (desc.includes('thunderstorm') || desc.includes('thunder')) return t('weather.conditions.thunderstorm');
     if (desc.includes('mist')) return t('weather.conditions.mist');
     if (desc.includes('fog')) return t('weather.conditions.fog');
@@ -298,7 +351,14 @@ const DestinationDetailScreen = ({ route, navigation }) => {
         
         {/* Obere Zeile: Name & Temperatur */}
         <View style={styles.headerTop}>
-          <Text style={[styles.headerTitle, { color: textColor }]} numberOfLines={2}>{forecast.name}</Text>
+          <View style={styles.headerNameContainer}>
+            <Text style={[styles.headerTitle, { color: textColor }]} numberOfLines={2}>{forecast.name}</Text>
+            {(forecast.countryCode || forecast.country_code) && (
+              <Text style={[styles.headerCountry, { color: subtitleColor }]}>
+                {getCountryName(forecast.countryCode || forecast.country_code, i18n.language || 'en')}
+              </Text>
+            )}
+          </View>
           <Text style={[styles.headerTemp, { color: textColor }]}>{Math.round(forecast.temperature)}°</Text>
         </View>
         
@@ -364,11 +424,50 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               const isWeatherCurse = badge === 'WEATHER_CURSE';
               const isSpringAwakening = badge === 'SPRING_AWAKENING';
               
+              // Get summary text for collapsed state
+              const getSummaryText = () => {
+                if (isWorthTheDrive && worthData) {
+                  return `+${worthData.tempDelta}°C | ${Math.round(destination.distance)}km | +${worthData.delta} Pkt`;
+                }
+                if (isWorthTheDriveBudget && worthBudgetData) {
+                  return `+${worthBudgetData.tempDelta}°C | ${Math.round(destination.distance)}km | +${worthBudgetData.delta} Pkt`;
+                }
+                if (isWarmAndDry && warmDryData) {
+                  return `${warmDryData.temp}°C | ${warmDryData.condition}`;
+                }
+                if (isBeachParadise && beachData) {
+                  return `${beachData.temp}°C | ${beachData.sunnyDays} Sonnentage`;
+                }
+                if (isSunnyStreak && sunnyStreakData) {
+                  return `${sunnyStreakData.streakLength} Tage ☀️ | Ø ${sunnyStreakData.avgTemp}°C`;
+                }
+                if (isWeatherMiracle && miracleData) {
+                  return `+${miracleData.tempDelta}°C | +${miracleData.improvement} Pkt`;
+                }
+                if (isHeatwave && heatwaveData) {
+                  return `${heatwaveData.days} Tage 🔥 | Ø ${heatwaveData.avgTemp}°C`;
+                }
+                if (isSnowKing && snowKingData) {
+                  return `${snowKingData.snowDays} Tage ❄️ | ${snowKingData.totalSnowfall}cm`;
+                }
+                if (isRainyDays && rainyDaysData) {
+                  return `${rainyDaysData.rainyDays} Regentage`;
+                }
+                if (isWeatherCurse && weatherCurseData) {
+                  return `⚠️ ${weatherCurseData.tempLoss}°C Verlust bald!`;
+                }
+                if (isSpringAwakening && springAwakeningData) {
+                  return `+${springAwakeningData.tempDelta}°C | ${Math.round(springAwakeningData.distance)}km`;
+                }
+                return 'Tap für Details';
+              };
+              
               // Animated Badge Card
               const AnimatedBadgeCard = () => {
                 const fadeAnim = React.useRef(new Animated.Value(0)).current;
                 const slideAnim = React.useRef(new Animated.Value(50)).current;
                 const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+                const isExpanded = expandedBadges[badge] || false;
                 
                 React.useEffect(() => {
                   fadeAnim.setValue(0);
@@ -399,33 +498,52 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                   ]).start();
                 }, [destination, badge]);
                 
+                const toggleExpand = () => {
+                  setExpandedBadges(prev => ({
+                    ...prev,
+                    [badge]: !prev[badge]
+                  }));
+                };
+                
                 return (
-                  <Animated.View 
-                    style={[
-                      styles.badgeCard, 
-                      { backgroundColor: theme.background },
-                      {
-                        opacity: fadeAnim,
-                        transform: [
-                          { translateX: slideAnim },
-                          { scale: scaleAnim }
-                        ],
-                      }
-                    ]}
-                  >
-                    <View style={[styles.badgeIconContainer, { backgroundColor: metadata.color }]}>
-                      <Text style={styles.badgeCardIcon}>{metadata.icon}</Text>
-                    </View>
-                    <View style={styles.badgeContent}>
-                      <Text style={[styles.badgeName, { color: theme.text }]}>
-                        {t(`badges.${badge.toLowerCase().replace(/_/g, '')}`)}
-                      </Text>
-                      <Text style={[styles.badgeDescription, { color: theme.textSecondary }]}>
-                        {t(`badges.${badge.toLowerCase().replace(/_/g, '')}Description`)}
-                      </Text>
-                      
-                      {/* Worth the Drive stats */}
-                      {isWorthTheDrive && worthData && (
+                  <TouchableOpacity onPress={toggleExpand} activeOpacity={0.7}>
+                    <Animated.View 
+                      style={[
+                        styles.badgeCard, 
+                        { backgroundColor: theme.background },
+                        {
+                          opacity: fadeAnim,
+                          transform: [
+                            { translateX: slideAnim },
+                            { scale: scaleAnim }
+                          ],
+                        }
+                      ]}
+                    >
+                      <View style={[styles.badgeIconContainer, { backgroundColor: metadata.color }]}>
+                        <Text style={styles.badgeCardIcon}>{metadata.icon}</Text>
+                      </View>
+                      <View style={styles.badgeContent}>
+                        <Text style={[styles.badgeName, { color: theme.text }]}>
+                          {t(`badges.${badge.toLowerCase().replace(/_/g, '')}`)}
+                        </Text>
+                        
+                        {/* Collapsed: Show summary */}
+                        {!isExpanded && (
+                          <Text style={[styles.badgeSummary, { color: theme.textSecondary }]}>
+                            {getSummaryText()}
+                          </Text>
+                        )}
+                        
+                        {/* Expanded: Show description and details */}
+                        {isExpanded && (
+                          <>
+                            <Text style={[styles.badgeDescription, { color: theme.textSecondary }]}>
+                              {t(`badges.${badge.toLowerCase().replace(/_/g, '')}Description`)}
+                            </Text>
+                            
+                            {/* Worth the Drive stats */}
+                            {isWorthTheDrive && worthData && (
                         <View style={styles.badgeStats}>
                           <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
                             🌡️ Temperatur: {worthData.tempOrigin}°C → {worthData.tempDest}°C (+{worthData.tempDelta}°C)
@@ -579,8 +697,14 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                           </Text>
                         </View>
                       )}
-                    </View>
-                  </Animated.View>
+                          </>
+                        )}
+                      </View>
+                      <Text style={[styles.badgeExpandIndicator, { color: theme.textSecondary }]}>
+                        {isExpanded ? '▲' : '▼'}
+                      </Text>
+                    </Animated.View>
+                  </TouchableOpacity>
                 );
               };
               
@@ -588,6 +712,17 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             })}
           </View>
         )}
+
+        {/* Dorthin fahren Button - nach Badges */}
+        <TouchableOpacity
+          style={[styles.driveButtonTop, {
+            backgroundColor: theme.primary,
+            shadowColor: theme.primary
+          }]}
+          onPress={handleDriveThere}
+        >
+          <Text style={styles.driveButtonTopText}>{t('destination.driveThere')}</Text>
+        </TouchableOpacity>
 
         <View style={[styles.forecastSection, {
           backgroundColor: theme.surface,
@@ -597,40 +732,30 @@ const DestinationDetailScreen = ({ route, navigation }) => {
           
           <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
             <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.today')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast.today.condition)}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.today?.condition)}</Text>
             <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast.today.high}° / {forecast.forecast.today.low}°
+              {forecast.forecast?.today?.high ?? forecast.temperature ?? '?'}° / {forecast.forecast?.today?.low ?? (forecast.temperature ? forecast.temperature - 3 : '?')}°
             </Text>
           </View>
 
           <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
             <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.tomorrow')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast.tomorrow.condition)}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.tomorrow?.condition)}</Text>
             <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast.tomorrow.high}° / {forecast.forecast.tomorrow.low}°
+              {forecast.forecast?.tomorrow?.high ?? '?'}° / {forecast.forecast?.tomorrow?.low ?? '?'}°
             </Text>
           </View>
 
           <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
             <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.day3')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast.day3.condition)}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.day3?.condition)}</Text>
             <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast.day3.high}° / {forecast.forecast.day3.low}°
+              {forecast.forecast?.day3?.high ?? '?'}° / {forecast.forecast?.day3?.low ?? '?'}°
             </Text>
           </View>
         </View>
 
         <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[styles.driveButton, {
-              backgroundColor: theme.primary,
-              shadowColor: theme.primary
-            }]}
-            onPress={handleDriveThere}
-          >
-            <Text style={styles.driveButtonText}>{t('destination.driveThere')}</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={[styles.favouriteButton, {
               backgroundColor: isFavourite ? theme.primary : theme.surface,
@@ -697,50 +822,59 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   header: {
-    padding: 24,
-    paddingTop: 32,
-    paddingBottom: 32,
+    padding: 20,
+    paddingTop: 28,
+    paddingBottom: 20,
     position: 'relative',
     overflow: 'hidden',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+    minHeight: 140,
   },
   headerBgIcon: {
     position: 'absolute',
-    fontSize: 110,
-    top: '55%',
-    left: '56%',
-    transform: [{ translateX: -55 }, { translateY: -55 }],
-    opacity: 0.4,
+    fontSize: 90,
+    top: '50%',
+    left: '80%',
+    transform: [{ translateX: -45 }, { translateY: -45 }],
+    opacity: 0.35,
     textShadowColor: 'rgba(255, 255, 255, 0.5)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 15,
+    textShadowRadius: 12,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 16,
     zIndex: 1,
   },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    maxWidth: '65%',
+  headerNameContainer: {
     flexShrink: 1,
+    maxWidth: '65%',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  headerCountry: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginTop: 2,
+    opacity: 0.9,
   },
   headerTemp: {
-    fontSize: 64,
+    fontSize: 56,
     fontWeight: '300',
     letterSpacing: -2,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     zIndex: 1,
   },
   content: {
@@ -827,10 +961,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+  badgeSummary: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  badgeExpandIndicator: {
+    fontSize: 12,
+    position: 'absolute',
+    right: 16,
+    top: 20,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 15,
+  },
+  driveButtonTop: {
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    minHeight: 72,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 10,
+  },
+  driveButtonTopText: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
   forecastItem: {
     flexDirection: 'row',

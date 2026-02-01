@@ -47,7 +47,7 @@ const MAP_BOUNDS = {
 };
 
 const MapScreen = ({ navigation }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { theme } = useTheme();
   const mapRef = useRef(null);
   const [location, setLocation] = useState(null);
@@ -209,11 +209,16 @@ const MapScreen = ({ navigation }) => {
       
       console.log(`🔄 Loading destinations for center: ${effectiveCenter.latitude.toFixed(2)}, ${effectiveCenter.longitude.toFixed(2)}, radius: ${radius}km`);
       
+      // Get origin temperature for badge calculation
+      const originTemp = centerPointWeather?.temperature || null;
+      
       const weatherData = await getWeatherForRadius(
         effectiveCenter.latitude,
         effectiveCenter.longitude,
         radius,
-        selectedCondition
+        selectedCondition,
+        originTemp, // Pass center point temp for accurate badge calculation!
+        i18n.language // Pass locale for country name translation
       );
       
       // ALWAYS add current location as first marker
@@ -294,20 +299,23 @@ const MapScreen = ({ navigation }) => {
         console.warn('Reverse geocoding failed:', geoError);
       }
 
-      // Use Open-Meteo API for current location
+      // Use Open-Meteo API for current location - fetch DAILY max temp
       const params = new URLSearchParams({
         latitude: location.latitude,
         longitude: location.longitude,
-        current: [
-          'temperature_2m',
-          'relative_humidity_2m',
-          'apparent_temperature',
-          'precipitation',
+        daily: [
+          'temperature_2m_max',
+          'temperature_2m_min',
           'weather_code',
+          'precipitation_sum',
+          'wind_speed_10m_max',
+        ].join(','),
+        current: [
+          'relative_humidity_2m',
           'cloud_cover',
-          'wind_speed_10m',
         ].join(','),
         timezone: 'auto',
+        forecast_days: 1,
       });
 
       const url = `https://api.open-meteo.com/v1/forecast?${params}`;
@@ -316,23 +324,25 @@ const MapScreen = ({ navigation }) => {
       if (!response.ok) return null;
 
       const data = await response.json();
-      const current = data.current;
+      const daily = data.daily;
+      const current = data.current || {};
 
-      // Map to app format
-      const condition = mapWeatherCodeToCondition(current.weather_code);
+      // Map to app format - use MAX temp for the day
+      const condition = mapWeatherCodeToCondition(daily.weather_code?.[0]);
       
       return {
         lat: location.latitude,
         lon: location.longitude,
         name: `📍 ${cityName}`, // Use geocoded city name
         condition,
-        temperature: Math.round(current.temperature_2m || 0),
-        feelsLike: Math.round(current.apparent_temperature || 0),
+        temperature: Math.round(daily.temperature_2m_max?.[0] || 0), // MAX temp!
+        temp_max: daily.temperature_2m_max?.[0],
+        temp_min: daily.temperature_2m_min?.[0],
         humidity: current.relative_humidity_2m,
-        windSpeed: Math.round(current.wind_speed_10m || 0),
-        precipitation: current.precipitation || 0,
+        windSpeed: Math.round(daily.wind_speed_10m_max?.[0] || 0),
+        precipitation: daily.precipitation_sum?.[0] || 0,
         cloudCover: current.cloud_cover,
-        stability: calculateStability(current.cloud_cover, current.wind_speed_10m),
+        stability: calculateStability(current.cloud_cover, daily.wind_speed_10m_max?.[0]),
         distance: 0,
         isCurrentLocation: true, // Mark as current location
         badges: [],
@@ -490,7 +500,7 @@ const MapScreen = ({ navigation }) => {
   };
 
   /**
-   * Calculate display score: Badges = max priority, otherwise use attractiveness
+   * Calculate display score: Badges first, then TEMPERATURE (warmest wins!)
    */
   const getDisplayScore = (place) => {
     // Orte mit Badges = immer max Score (100)
@@ -498,91 +508,102 @@ const MapScreen = ({ navigation }) => {
       return 100;
     }
     
-    // Orte ohne Badges = attractivenessScore
-    return place.attractivenessScore || 50;
+    // TEMPERATUR als Hauptfaktor! (0-40°C → 0-80 Punkte)
+    const temp = place.temperature ?? 15;
+    const tempScore = Math.min(80, Math.max(0, temp * 2)); // 20°C = 40pts, 30°C = 60pts
+    
+    // Sunny weather bonus
+    const sunnyConditions = ['clear', 'sunny', 'Clear', 'Sunny'];
+    const sunnyBonus = sunnyConditions.includes(place.condition) || 
+                       sunnyConditions.includes(place.weather_main) ? 15 : 0;
+    
+    return tempScore + sunnyBonus;
   };
 
   /**
-   * QUALITY-FIRST GREEDY ALGORITHM: Strict filtering at low zoom, more markers when zoomed in
+   * SOFT CLUSTERING ALGORITHM
+   * - Always shows 100-200 markers
+   * - Natural clustering allowed (more markers where weather is good)
+   * - Max 30 markers per 100km region (prevents extreme clustering)
+   * - Min 5km between markers (prevents overlap)
+   * - Prioritizes: special > badges > score > temperature
    */
+  
+  // ========== DEAD SIMPLE MARKER FILTER ==========
+  // No regions, no soft clustering, just WORKS
+  const MAX_MARKERS = 50; // HARD LIMIT
+  
+  const getMinDistanceForZoom = (zoom) => {
+    if (zoom < 5) return 100;  // Very far out
+    if (zoom < 7) return 70;   
+    if (zoom < 9) return 50;   
+    if (zoom < 11) return 30;  
+    return 20;                 // Zoomed in
+  };
+  
   const getVisibleMarkers = (allPlaces, zoom, bounds) => {
-    // VIEL strengere Distance bei niedrigem Zoom (clean overview)
-    const minDistKm = zoom < 5 ? 300 :   // Sehr weit raus - nur Top-Cities
-                      zoom < 7 ? 150 :   // Weit - beste Places
-                      zoom < 9 ? 70 :    // Medium
-                      zoom < 11 ? 30 :   // Nah
-                      zoom < 13 ? 15 : 7; // Sehr nah
+    // STEP 1: Filter valid places
+    const candidates = allPlaces.filter(p => 
+      p.temperature !== null && p.temperature !== undefined
+    );
     
-    // Niedrigeres Limit bei niedrigem Zoom (quality over quantity)
-    const maxMarkers = zoom < 5 ? 30 :    // Nur Top-Orte
-                       zoom < 7 ? 80 :    // Beste Places
-                       zoom < 10 ? 200 :  // Mehr Details
-                       zoom < 13 ? 400 : 800; // Volle Dichte
+    if (candidates.length === 0) return [];
+    console.log(`🎯 ${candidates.length} candidates`);
     
-    // HÖHERER Score-Threshold bei niedrigem Zoom (only best places)
-    const minScore = zoom < 7 ? 70 :      // Nur beste Places
-                     zoom < 10 ? 55 : 40;  // Mehr erlauben
-    
-    // ALWAYS keep special markers (current location, center point)
-    const specialMarkers = allPlaces.filter(p => p.isCurrentLocation || p.isCenterPoint);
-    const regularPlaces = allPlaces.filter(p => !p.isCurrentLocation && !p.isCenterPoint);
-    
-    // Viewport-Filter: Only visible area (with padding for smooth experience)
-    const inViewport = regularPlaces.filter(p => {
-      if (!bounds) return true; // No bounds yet, show all
+    // STEP 2: Sort by quality (special > badges > score > temp)
+    candidates.sort((a, b) => {
+      // Special markers always first
+      if (a.isCurrentLocation || a.isCenterPoint) return -1;
+      if (b.isCurrentLocation || b.isCenterPoint) return 1;
       
-      const lat = p.lat;
-      const lon = p.lon;
+      // Badges next
+      const aBadges = a.badges?.length || 0;
+      const bBadges = b.badges?.length || 0;
+      if (aBadges !== bBadges) return bBadges - aBadges;
       
-      // Add 20% padding to bounds for smoother experience
-      const latPadding = (bounds.north - bounds.south) * 0.2;
-      const lonPadding = (bounds.east - bounds.west) * 0.2;
+      // Then attractiveness
+      const scoreDiff = (b.attractivenessScore || b.attractiveness_score || 50) - 
+                        (a.attractivenessScore || a.attractiveness_score || 50);
+      if (Math.abs(scoreDiff) > 10) return scoreDiff;
       
-      return lat >= bounds.south - latPadding &&
-             lat <= bounds.north + latPadding &&
-             lon >= bounds.west - lonPadding &&
-             lon <= bounds.east + lonPadding;
+      // Finally temperature
+      return (b.temperature || 0) - (a.temperature || 0);
     });
     
-    // Calculate display scores (badges = 100, otherwise attractiveness)
-    const withScores = inViewport.map(p => ({
-      ...p,
-      displayScore: getDisplayScore(p)
-    }));
+    // STEP 3: Zoom-dependent distance
+    const minDist = getMinDistanceForZoom(zoom);
+    console.log(`📏 Zoom ${zoom.toFixed(1)} → ${minDist}km min distance`);
     
-    // Sort by DISPLAY SCORE (badges first!)
-    const sorted = withScores
-      .filter(p => p.displayScore >= minScore)  // Use dynamic score for filtering!
-      .sort((a, b) => {
-        const scoreDiff = b.displayScore - a.displayScore;
-        if (Math.abs(scoreDiff) > 5) return scoreDiff;
-        return (b.population || 0) - (a.population || 0);
-      });
+    // STEP 4: Greedy selection with distance check
+    const result = [];
     
-    // Debug: Show breakdown
-    const withBadges = sorted.filter(p => p.badges && p.badges.length > 0).length;
-    const withoutBadges = sorted.length - withBadges;
-    console.log(`📍 Viewport: ${inViewport.length} places → ${sorted.length} after filter (${withBadges} with badges, ${withoutBadges} without)`);
-    
-    // Greedy Selection
-    const selected = [...specialMarkers]; // Start with special markers
-    
-    for (const place of sorted) {
-      // Too close to existing marker?
-      const tooClose = selected.some(existing => 
-        getDistanceKm(place.lat, place.lon, existing.lat, existing.lon) < minDistKm
-      );
+    for (const place of candidates) {
+      if (result.length >= MAX_MARKERS) break;
       
-      if (!tooClose) {
-        selected.push(place);
+      const lat = place.lat || place.latitude;
+      const lon = place.lon || place.longitude;
+      
+      // Special markers always included
+      if (place.isCurrentLocation || place.isCenterPoint) {
+        result.push(place);
+        continue;
       }
       
-      if (selected.length >= maxMarkers) break;
+      // Check distance to ALL existing markers
+      const tooClose = result.some(existing => {
+        const exLat = existing.lat || existing.latitude;
+        const exLon = existing.lon || existing.longitude;
+        return getDistanceKm(lat, lon, exLat, exLon) < minDist;
+      });
+      
+      if (!tooClose) {
+        result.push(place);
+      }
     }
     
-    console.log(`✨ Selected ${selected.length} markers (minDist=${minDistKm}km, max=${maxMarkers})`);
-    
-    return selected;
+    const badgeCount = result.filter(p => p.badges?.length > 0).length;
+    console.log(`✅ ${result.length} markers (${badgeCount} badges, ${minDist}km spacing)`);
+    return result;
   };
 
   /**
@@ -659,20 +680,23 @@ const MapScreen = ({ navigation }) => {
         console.warn('Reverse geocoding failed:', geoError);
       }
 
-      // Use Open-Meteo API
+      // Use Open-Meteo API - fetch DAILY max temp
       const params = new URLSearchParams({
         latitude: lat,
         longitude: lon,
-        current: [
-          'temperature_2m',
-          'relative_humidity_2m',
-          'apparent_temperature',
-          'precipitation',
+        daily: [
+          'temperature_2m_max',
+          'temperature_2m_min',
           'weather_code',
+          'precipitation_sum',
+          'wind_speed_10m_max',
+        ].join(','),
+        current: [
+          'relative_humidity_2m',
           'cloud_cover',
-          'wind_speed_10m',
         ].join(','),
         timezone: 'auto',
+        forecast_days: 1,
       });
 
       const url = `https://api.open-meteo.com/v1/forecast?${params}`;
@@ -684,23 +708,25 @@ const MapScreen = ({ navigation }) => {
       }
 
       const data = await response.json();
-      const current = data.current;
+      const daily = data.daily;
+      const current = data.current || {};
 
-      // Map to app format
-      const condition = mapWeatherCodeToCondition(current.weather_code);
+      // Map to app format - use MAX temp for the day
+      const condition = mapWeatherCodeToCondition(daily.weather_code?.[0]);
       
       const weatherData = {
         lat,
         lon,
         name: `⊕ ${cityName}`,
         condition,
-        temperature: Math.round(current.temperature_2m || 0),
-        feelsLike: Math.round(current.apparent_temperature || 0),
+        temperature: Math.round(daily.temperature_2m_max?.[0] || 0), // MAX temp!
+        temp_max: daily.temperature_2m_max?.[0],
+        temp_min: daily.temperature_2m_min?.[0],
         humidity: current.relative_humidity_2m,
-        windSpeed: Math.round(current.wind_speed_10m || 0),
-        precipitation: current.precipitation || 0,
+        windSpeed: Math.round(daily.wind_speed_10m_max?.[0] || 0),
+        precipitation: daily.precipitation_sum?.[0] || 0,
         cloudCover: current.cloud_cover,
-        stability: calculateStability(current.cloud_cover, current.wind_speed_10m),
+        stability: calculateStability(current.cloud_cover, daily.wind_speed_10m_max?.[0]),
         isCenterPoint: true, // Mark as center point (like isCurrentLocation)
         badges: [],
       };

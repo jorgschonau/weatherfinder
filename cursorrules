@@ -1,0 +1,95 @@
+# SunNomad Development Rules
+
+## Philosophy
+- SIMPLE BEATS PERFECT - This is a €3 app, not enterprise software
+- LAUNCH > PERFECTION - Ship fast, iterate based on user feedback  
+- NO OVERENGINEERING - Direct solutions, no abstraction layers
+- "Good enough beats overthought"
+
+## Code Style
+- Direct SQL queries, NO views or stored procedures unless absolutely necessary
+- Avoid Window Functions over huge unfiltered tables (use LIMIT/WHERE first)
+- Window Functions are fine for smaller result sets
+- Concrete runnable code over pseudo-code
+- Short & concise responses, no conversational fluff
+- Get straight to the point - code first, explanations only if asked
+
+## Tech Stack
+- Backend: Python, SQL (PostgreSQL/Supabase with PostGIS)
+- Weather: Open-Meteo API (free tier, 10k calls/day)
+- Mobile: React Native
+- Database: Single source of truth, no views
+- Mac development environment
+
+## User Context
+- Name: Jörg
+- Building: Weather app for RV/camper van travelers
+- Regions: Europe + North America (incl. Turkey, Morocco, Tunisia)
+- Languages: German, English, French
+- Target launch: End of February 2026
+- User knows Python and SQL
+- Very hands-on, needs concrete examples
+
+## Key Features
+- Map with weather markers (filtered by attractiveness score)
+- Badge system (Worth the Drive, Warm & Dry, etc.)
+- Attractiveness scoring (population + elevation + feature codes)
+- Weather forecast (14 days ahead)
+- currently ~40k places, ~2k POIs, will expand/ filter later
+
+## Database Structure
+- `places` - locations (population, elevation, attractiveness_score, geom)
+- `weather_forecast` - weather data (place_id, forecast_date, temperature, etc.)
+- NO complex views - query tables directly
+- Use PostGIS geography for distance calculations
+
+## Response Format
+- Provide complete, runnable code/SQL immediately
+- No "you could do this" - give the actual solution
+- Explain WHY only if asked
+- Use bullet points sparingly
+- No redundant pleasantries
+
+## What to AVOID
+- Enterprise patterns (views, stored procedures, middleware, abstraction layers)
+- Complex JOIN chains - keep queries simple
+- Overthinking performance - optimize only when needed
+- Long explanations before code
+- Asking permission to proceed - just do it
+
+## Mac-Specific
+- Use `curl` not `wget`
+- Use `unzip -p` for zip files
+- Commands should work on macOS out of the box
+
+## Quick Wins Over Perfect Architecture
+- If DELETE is slow → CREATE new table instead
+- If query times out → add LIMIT, use batches
+- If Views cause confusion → drop them, use direct queries
+- If unsure → simplest solution that works
+
+## Examples of Good vs Bad
+
+BAD: "We could implement a view layer with materialized views for caching, then use a stored procedure with window functions..."
+
+GOOD: "SELECT p.*, wf.temperature FROM places p LEFT JOIN weather_forecast wf ON p.id = wf.place_id WHERE wf.forecast_date = CURRENT_DATE;"
+
+BAD: "Here's some pseudo-code to illustrate the concept..."
+
+GOOD: [Complete working code immediately]
+
+BAD: "There are several approaches we could consider..."
+
+GOOD: [One concrete solution that works]
+
+## Current Priorities (Jan 2026)
+1. Fix data mismatches (drop all views, direct queries only)
+2. Implement auto-refresh (daily weather update)
+3. Privacy Policy + Terms of Service
+4. App Store screenshots and descriptions
+5. Final UI polish
+
+## Remember
+- Jörg wants to LAUNCH, not build perfect architecture
+- Simple working code > elegant complex code
+- When in doubt, pick the simplest solution

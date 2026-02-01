@@ -91,7 +91,7 @@ async function saveForecast(placeId, daily) {
   const fetchedAt = new Date().toISOString();
   const records = daily.time.map((time, i) => ({
     place_id: placeId,
-    forecast_timestamp: new Date(time).toISOString(),
+    forecast_date: time, // Already YYYY-MM-DD from Open-Meteo API
     fetched_at: fetchedAt,
     temp_min: daily.temperature_2m_min[i],
     temp_max: daily.temperature_2m_max[i],
@@ -108,7 +108,7 @@ async function saveForecast(placeId, daily) {
     sunset: daily.sunset?.[i] ? new Date(daily.sunset[i]).toISOString() : null,
     data_source: 'open-meteo',
   }));
-  await supabase.from('weather_forecast').upsert(records, { onConflict: 'place_id,forecast_timestamp,fetched_at' });
+  await supabase.from('weather_forecast').upsert(records, { onConflict: 'place_id,forecast_date' });
 }
 
 async function main() {

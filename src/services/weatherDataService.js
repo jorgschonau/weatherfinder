@@ -185,13 +185,16 @@ export const getWeatherForecast = async (placeId, days = 3) => {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() + days);
 
+    const today = new Date().toISOString().split('T')[0];
+    const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+    
     const { data, error } = await supabase
       .from('weather_forecast')
       .select('*')
       .eq('place_id', placeId)
-      .gte('forecast_timestamp', new Date().toISOString())
-      .lte('forecast_timestamp', cutoffDate.toISOString())
-      .order('forecast_timestamp', { ascending: true });
+      .gte('forecast_date', today)
+      .lte('forecast_date', cutoffDateStr)
+      .order('forecast_date', { ascending: true });
 
     if (error) throw error;
     return { forecast: data, error: null };
@@ -213,7 +216,7 @@ export const saveWeatherForecast = async (placeId, forecastApiData) => {
     
     const forecastRecords = forecastApiData.map(item => ({
       place_id: placeId,
-      forecast_timestamp: new Date(item.dt * 1000).toISOString(),
+      forecast_date: new Date(item.dt * 1000).toISOString().split('T')[0], // YYYY-MM-DD
       fetched_at: fetchedAt,
       
       temperature: item.main?.temp,
@@ -241,7 +244,7 @@ export const saveWeatherForecast = async (placeId, forecastApiData) => {
     const { error } = await supabase
       .from('weather_forecast')
       .upsert(forecastRecords, {
-        onConflict: 'place_id,forecast_timestamp,fetched_at',
+        onConflict: 'place_id,forecast_date',
       });
 
     if (error) throw error;

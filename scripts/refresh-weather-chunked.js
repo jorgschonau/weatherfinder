@@ -113,7 +113,6 @@ async function saveWeatherData(placeId, current, daily) {
   const record = {
     place_id: placeId,
     forecast_date: today,
-    forecast_timestamp: new Date(current.time).toISOString(),
     fetched_at: fetchedAt,
     temp_min: daily.temperature_2m_min[0],
     temp_max: daily.temperature_2m_max[0],
@@ -145,7 +144,6 @@ async function saveForecast(placeId, daily) {
     return {
       place_id: placeId,
       forecast_date: time,
-      forecast_timestamp: new Date(time).toISOString(),
       fetched_at: fetchedAt,
       temp_min: daily.temperature_2m_min[actualIndex],
       temp_max: daily.temperature_2m_max[actualIndex],
@@ -205,13 +203,12 @@ async function main() {
   const startTime = Date.now();
 
   // Get chunk of places
-  console.log(`📍 Fetching places ${START_OFFSET} to ${START_OFFSET + CHUNK_SIZE} (excluding to_remove=true)...`);
+  console.log(`📍 Fetching places ${START_OFFSET} to ${START_OFFSET + CHUNK_SIZE}...`);
   
   const { data: places, error } = await supabase
     .from('places')
     .select('id, name, latitude, longitude')
     .eq('is_active', true)
-    .or('to_remove.eq.false,to_remove.is.null') // Only places NOT marked for removal
     .range(START_OFFSET, START_OFFSET + CHUNK_SIZE - 1);
 
   if (error) {
