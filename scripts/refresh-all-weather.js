@@ -19,8 +19,9 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
 const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
-const BATCH_SIZE = 20; // Process 20 locations in parallel
-const RATE_LIMIT_DELAY = 100; // 100ms between batches (be nice to free API)
+const BATCH_SIZE = 10; // Process 10 locations in parallel (reduced for stability)
+const RATE_LIMIT_DELAY = 5000; // 5s between batches (be nice to free API)
+const MAX_RETRIES = 2; // Retry failed places up to 2 times
 
 /**
  * Weather code mapping
@@ -231,7 +232,9 @@ async function processBatch(places, batchNum, totalBatches) {
 
   console.log(`  📊 Success: ${successCount}/${places.length}`);
   
-  return { successCount, failCount };
+  // Return failed places for retry
+  const failedPlaceObjects = places.filter((p, i) => !results[i].success);
+  return { successCount, failCount, failedPlaces: failedPlaceObjects };
 }
 
 /**
@@ -295,17 +298,17 @@ async function main() {
   }
 
   let totalSuccess = 0;
-  let totalFailed = 0;
+  let allFailedPlaces = [];
 
   for (let i = 0; i < batches.length; i++) {
-    const { successCount, failCount } = await processBatch(
+    const { successCount, failedPlaces } = await processBatch(
       batches[i],
       i + 1,
       batches.length
     );
 
     totalSuccess += successCount;
-    totalFailed += failCount;
+    allFailedPlaces = allFailedPlaces.concat(failedPlaces || []);
 
     // Rate limiting
     if (i < batches.length - 1) {
@@ -313,19 +316,73 @@ async function main() {
     }
   }
 
+  // 3. Retry failed places
+  let retrySuccess = 0;
+  if (allFailedPlaces.length > 0) {
+    for (let retry = 1; retry <= MAX_RETRIES; retry++) {
+      if (allFailedPlaces.length === 0) break;
+      
+      console.log(`\n🔄 Retry ${retry}/${MAX_RETRIES}: ${allFailedPlaces.length} failed places...`);
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 2)); // Extra delay before retry
+      
+      const retryBatches = [];
+      for (let i = 0; i < allFailedPlaces.length; i += BATCH_SIZE) {
+        retryBatches.push(allFailedPlaces.slice(i, i + BATCH_SIZE));
+      }
+      
+      let stillFailed = [];
+      for (let i = 0; i < retryBatches.length; i++) {
+        const { successCount, failedPlaces } = await processBatch(
+          retryBatches[i],
+          i + 1,
+          retryBatches.length
+        );
+        
+        retrySuccess += successCount;
+        stillFailed = stillFailed.concat(failedPlaces || []);
+        
+        if (i < retryBatches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+        }
+      }
+      
+      allFailedPlaces = stillFailed;
+      
+      if (allFailedPlaces.length === 0) {
+        console.log(`  ✅ All retries successful!`);
+      } else {
+        console.log(`  📊 Retry ${retry}: Still ${allFailedPlaces.length} failed`);
+      }
+    }
+  }
+
+  const totalFailed = allFailedPlaces.length;
+  const finalSuccess = totalSuccess + retrySuccess;
   const duration = Math.round((Date.now() - startTime) / 1000);
 
-  // 3. Summary
+  // 4. Summary
   console.log('\n╔═══════════════════════════════════════════════════╗');
   console.log('║   Summary                                         ║');
   console.log('╚═══════════════════════════════════════════════════╝\n');
-  console.log(`  ✅ Success:  ${totalSuccess}/${places.length} locations`);
+  console.log(`  ✅ Success:  ${finalSuccess}/${places.length} locations`);
+  if (retrySuccess > 0) {
+    console.log(`     (${totalSuccess} first try + ${retrySuccess} retries)`);
+  }
   console.log(`  ❌ Failed:   ${totalFailed}/${places.length} locations`);
-  console.log(`  📊 API Calls: ${totalSuccess} (1 per location)`);
-  console.log(`  ⏱️  Duration: ${duration}s (${(totalSuccess / duration).toFixed(1)} locations/sec)`);
+  if (totalFailed > 0) {
+    console.log(`  📋 Failed places:`);
+    allFailedPlaces.slice(0, 20).forEach(p => {
+      console.log(`     - ${p.name} (${p.id})`);
+    });
+    if (allFailedPlaces.length > 20) {
+      console.log(`     ... and ${allFailedPlaces.length - 20} more`);
+    }
+  }
+  console.log(`  📊 API Calls: ~${finalSuccess + totalFailed * (MAX_RETRIES + 1)}`);
+  console.log(`  ⏱️  Duration: ${duration}s (${(finalSuccess / Math.max(duration, 1)).toFixed(1)} locations/sec)`);
   console.log('');
 
-  if (totalSuccess > 0) {
+  if (finalSuccess > 0) {
     console.log('🎉 Weather refresh complete!');
     console.log('');
     console.log('💡 Next steps:');
