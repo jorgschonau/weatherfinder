@@ -67,7 +67,6 @@ const MapScreen = ({ navigation }) => {
   const [mapType, setMapType] = useState('standard'); // standard, satellite, hybrid, terrain, mutedStandard
   const [controlsExpanded, setControlsExpanded] = useState(true); // Controls einklappbar
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showMockData, setShowMockData] = useState(true); // Toggle for mock data (temp for testing)
   const [showOnlyBadges, setShowOnlyBadges] = useState(false); // Toggle to show only destinations with badges
   const [showRadiusMenu, setShowRadiusMenu] = useState(false); // Dropdown for radius selection
   const [reverseMode, setReverseMode] = useState('warm'); // 'warm' or 'cold' - which places to reward
@@ -529,9 +528,10 @@ const MapScreen = ({ navigation }) => {
    * - Prioritizes: special > badges > score > temperature
    */
   
-  // ========== DEAD SIMPLE MARKER FILTER ==========
-  // No regions, no soft clustering, just WORKS
-  const MAX_MARKERS = 50; // HARD LIMIT
+  // ========== BALANCED MARKER FILTER ==========
+  // Shows mix of badge places AND normal good places
+  const MAX_MARKERS = 50;        // Total marker limit
+  const MAX_BADGE_MARKERS = 30;  // Cap for badge places to ensure normal places get shown
   
   const getMinDistanceForZoom = (zoom) => {
     if (zoom < 5) return 100;  // Very far out
@@ -541,6 +541,40 @@ const MapScreen = ({ navigation }) => {
     return 20;                 // Zoomed in
   };
   
+  /**
+   * Sort places by: attractiveness score → temperature → distance from user
+   */
+  const sortByQuality = (places, userLat, userLon) => {
+    return [...places].sort((a, b) => {
+      // Special markers always first
+      if (a.isCurrentLocation || a.isCenterPoint) return -1;
+      if (b.isCurrentLocation || b.isCenterPoint) return 1;
+      
+      // Primary: Attractiveness score (higher is better)
+      const aScore = a.attractivenessScore || a.attractiveness_score || 50;
+      const bScore = b.attractivenessScore || b.attractiveness_score || 50;
+      if (Math.abs(aScore - bScore) > 5) return bScore - aScore;
+      
+      // Secondary: Temperature (warmer is better)
+      const aTemp = a.temperature || 0;
+      const bTemp = b.temperature || 0;
+      if (Math.abs(aTemp - bTemp) > 2) return bTemp - aTemp;
+      
+      // Tertiary: Distance from user (closer is better)
+      if (userLat && userLon) {
+        const aLat = a.lat || a.latitude;
+        const aLon = a.lon || a.longitude;
+        const bLat = b.lat || b.latitude;
+        const bLon = b.lon || b.longitude;
+        const aDist = getDistanceKm(userLat, userLon, aLat, aLon);
+        const bDist = getDistanceKm(userLat, userLon, bLat, bLon);
+        return aDist - bDist;
+      }
+      
+      return 0;
+    });
+  };
+  
   const getVisibleMarkers = (allPlaces, zoom, bounds) => {
     // STEP 1: Filter valid places
     const candidates = allPlaces.filter(p => 
@@ -548,36 +582,52 @@ const MapScreen = ({ navigation }) => {
     );
     
     if (candidates.length === 0) return [];
-    console.log(`🎯 ${candidates.length} candidates`);
     
-    // STEP 2: Sort by quality (special > badges > score > temp)
-    candidates.sort((a, b) => {
-      // Special markers always first
-      if (a.isCurrentLocation || a.isCenterPoint) return -1;
-      if (b.isCurrentLocation || b.isCenterPoint) return 1;
-      
-      // Badges next
-      const aBadges = a.badges?.length || 0;
-      const bBadges = b.badges?.length || 0;
-      if (aBadges !== bBadges) return bBadges - aBadges;
-      
-      // Then attractiveness
-      const scoreDiff = (b.attractivenessScore || b.attractiveness_score || 50) - 
-                        (a.attractivenessScore || a.attractiveness_score || 50);
-      if (Math.abs(scoreDiff) > 10) return scoreDiff;
-      
-      // Finally temperature
-      return (b.temperature || 0) - (a.temperature || 0);
-    });
+    // Get user location for distance sorting
+    const userLat = location?.latitude;
+    const userLon = location?.longitude;
     
-    // STEP 3: Zoom-dependent distance
+    // STEP 2: Separate into two groups - with badges and without badges
+    const specialMarkers = candidates.filter(p => p.isCurrentLocation || p.isCenterPoint);
+    const withBadges = candidates.filter(p => 
+      !p.isCurrentLocation && !p.isCenterPoint && p.badges && p.badges.length > 0
+    );
+    const withoutBadges = candidates.filter(p => 
+      !p.isCurrentLocation && !p.isCenterPoint && (!p.badges || p.badges.length === 0)
+    );
+    
+    console.log(`🎯 ${candidates.length} candidates: ${withBadges.length} with badges, ${withoutBadges.length} without badges`);
+    
+    // STEP 3: Sort each group by quality
+    const sortedWithBadges = sortByQuality(withBadges, userLat, userLon);
+    const sortedWithoutBadges = sortByQuality(withoutBadges, userLat, userLon);
+    
+    // STEP 4: Create balanced selection
+    // - First: all special markers
+    // - Then: up to MAX_BADGE_MARKERS badge places
+    // - Finally: fill remaining slots with normal places
+    const badgePlacesToShow = sortedWithBadges.slice(0, MAX_BADGE_MARKERS);
+    const remainingSlots = MAX_MARKERS - specialMarkers.length - badgePlacesToShow.length;
+    const normalPlacesToShow = sortedWithoutBadges.slice(0, Math.max(0, remainingSlots));
+    
+    // Combine: special first, then interleave badges and normal for better distribution
+    const combinedCandidates = [
+      ...specialMarkers,
+      ...badgePlacesToShow,
+      ...normalPlacesToShow
+    ];
+    
+    // Re-sort combined list by quality (but badges still tend to rank higher due to attractiveness)
+    const sortedCombined = sortByQuality(combinedCandidates, userLat, userLon);
+    
+    // STEP 5: Apply zoom-dependent distance filtering
     const minDist = getMinDistanceForZoom(zoom);
     console.log(`📏 Zoom ${zoom.toFixed(1)} → ${minDist}km min distance`);
     
-    // STEP 4: Greedy selection with distance check
+    // STEP 6: Greedy selection with distance check
     const result = [];
     
-    for (const place of candidates) {
+    for (const place of sortedCombined) {
       if (result.length >= MAX_MARKERS) break;
       
       const lat = place.lat || place.latitude;
@@ -602,7 +652,8 @@ const MapScreen = ({ navigation }) => {
     }
     
     const badgeCount = result.filter(p => p.badges?.length > 0).length;
-    console.log(`✅ ${result.length} markers (${badgeCount} badges, ${minDist}km spacing)`);
+    const normalCount = result.filter(p => !p.badges || p.badges.length === 0).length;
+    console.log(`✅ ${result.length} markers: ${badgeCount} with badges, ${normalCount} normal (${minDist}km spacing)`);
     return result;
   };
 
@@ -920,7 +971,6 @@ const MapScreen = ({ navigation }) => {
 
         {/* Greedy-filtered markers based on zoom + score */}
         {visibleMarkers
-          .filter(dest => showMockData || !dest.isMockData) // Filter mock data based on toggle
           .filter(dest => !showOnlyBadges || (dest.badges && dest.badges.length > 0)) // Filter by badges if toggle active
           .map((dest, index) => (
           <Marker
@@ -930,7 +980,7 @@ const MapScreen = ({ navigation }) => {
           >
             <View style={[
               styles.markerContainer, 
-              { backgroundColor: getWeatherColor(dest.condition) },
+              { backgroundColor: getWeatherColor(dest.condition, dest.temperature) },
               dest.isCurrentLocation && styles.currentLocationMarker,
               dest.isCenterPoint && styles.centerPointMarker
             ]}>
@@ -1012,22 +1062,6 @@ const MapScreen = ({ navigation }) => {
         accessibilityHint="View your saved favourite destinations"
       >
         <Text style={styles.favouritesIcon}>⭐</Text>
-      </TouchableOpacity>
-
-      {/* Mock Data Toggle Button (temp for testing) */}
-      <TouchableOpacity
-        style={[styles.mockToggleButton, { 
-          backgroundColor: showMockData ? theme.primary : theme.surface,
-          borderColor: theme.border,
-          shadowColor: theme.shadow
-        }]}
-        onPress={() => setShowMockData(!showMockData)}
-        accessibilityLabel={showMockData ? 'Hide mock data' : 'Show mock data'}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: showMockData }}
-        accessibilityHint="Toggle display of test data"
-      >
-        <Text style={[styles.mockToggleIcon, { color: showMockData ? '#fff' : theme.text }]}>🎲</Text>
       </TouchableOpacity>
 
       {/* Badge Filter Toggle Button */}
@@ -1157,7 +1191,7 @@ const MapScreen = ({ navigation }) => {
             borderColor: theme.border,
             shadowColor: theme.shadow
           }]}>
-            {[200, 400, 1000, 2000].map((radiusOption) => (
+            {[200, 500, 1000, 2000].map((radiusOption) => (
               <TouchableOpacity
                 key={radiusOption}
                 style={[styles.radiusPresetItem, radiusOption === radius && styles.radiusPresetItemActive]}
@@ -1627,31 +1661,9 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     marginTop: 4,
   },
-  mockToggleButton: {
-    position: 'absolute',
-    top: 158,
-    right: 10,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  mockToggleIcon: {
-    fontSize: 36,
-    textAlign: 'center',
-    lineHeight: 36,
-    includeFontPadding: false,
-    marginTop: 4,
-  },
   badgeToggleButton: {
     position: 'absolute',
-    top: 232, // Below mock toggle (158 + 64 + 10)
+    top: 158, // Below favourites button
     right: 10,
     width: 64,
     height: 64,
