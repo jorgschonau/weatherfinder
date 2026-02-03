@@ -152,6 +152,7 @@ async function saveWeatherData(placeId, current, daily) {
     weather_description: getWeatherDescription(current.weather_code),
     weather_icon: getWeatherIcon(current.weather_code),
     wind_speed: current.wind_speed_10m,
+    humidity: current.relative_humidity_2m || null,
     precipitation_sum: current.precipitation || 0,
     precipitation_probability: daily.precipitation_probability_max?.[0] ? daily.precipitation_probability_max[0] / 100 : null,
     rain_volume: current.rain || 0,

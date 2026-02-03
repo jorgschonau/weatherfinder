@@ -112,7 +112,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
       const chunk = placeIds.slice(i, i + CHUNK_SIZE);
       const { data: chunkWeather, error: chunkError } = await supabase
         .from('weather_forecast')
-        .select('place_id, forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, sunshine_duration, fetched_at')
+        .select('place_id, forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, sunshine_duration, fetched_at, humidity')
         .in('place_id', chunk)
         .gte('forecast_date', targetDate)
         .lte('forecast_date', fallbackDate)
@@ -201,6 +201,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
         weather_description: today.weather_description,
         weather_icon: today.weather_icon,
         wind_speed: today.wind_speed,
+        humidity: today.humidity,
         forecast_date: today.forecast_date,
         sunshine_duration: today.sunshine_duration,
         forecast, // Include multi-day forecast!
@@ -259,7 +260,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
           weather_timestamp: null,
           
           feels_like: null,
-          humidity: null,
+          humidity: place.humidity || null,
           cloud_cover: null,
           rain_3h: null,
           snow_3h: null,
