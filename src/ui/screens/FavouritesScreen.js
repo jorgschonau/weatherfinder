@@ -78,7 +78,7 @@ const FavouritesScreen = ({ navigation }) => {
       }]}
       onPress={() => handleViewDetails(item)}
     >
-      <View style={[styles.cardHeader, { backgroundColor: getWeatherColor(item.condition) }]}>
+      <View style={[styles.cardHeader, { backgroundColor: getWeatherColor(item.condition, item.temperature) }]}>
         <Text style={styles.weatherIcon}>{getWeatherIcon(item.condition)}</Text>
         <View style={styles.headerInfo}>
           <Text style={[styles.locationName, { color: theme.text }]}>{item.name}</Text>

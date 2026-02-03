@@ -18,6 +18,16 @@ import { toggleFavourite, isDestinationFavourite } from '../../usecases/favourit
 import { BadgeMetadata } from '../../domain/destinationBadge';
 import { getCountryName } from '../../utils/countryNames';
 
+// Convert wind speed (km/h) to descriptive text
+const getWindDescription = (windSpeed) => {
+  const speed = windSpeed || 0;
+  if (speed <= 10) return 'Windstill';
+  if (speed <= 20) return 'Leichte Brise';
+  if (speed <= 35) return 'Mäßiger Wind';
+  if (speed <= 50) return 'Starker Wind';
+  return 'Sturm';
+};
+
 const DestinationDetailScreen = ({ route, navigation }) => {
   const { t, i18n } = useTranslation();
   const { theme } = useTheme();
@@ -319,8 +329,29 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     if (desc.includes('mist')) return t('weather.conditions.mist');
     if (desc.includes('fog')) return t('weather.conditions.fog');
     
+    // Simple condition names (from badge calculations)
+    if (desc === 'sunny') return t('weather.sunny');
+    if (desc === 'cloudy') return t('weather.cloudy');
+    if (desc === 'rainy') return t('weather.rainy');
+    if (desc === 'snowy') return t('weather.snowy');
+    if (desc === 'windy') return t('weather.windy');
+    
     // Fallback to fixed description if no translation match
     return fixedDesc;
+  };
+
+  // Format ETA in H:MM format, rounded to 5 minutes
+  const formatETA = (decimalHours) => {
+    if (!decimalHours || decimalHours <= 0) return '0:00';
+    
+    const totalMinutes = Math.round(decimalHours * 60);
+    // Round to nearest 5 minutes
+    const roundedMinutes = Math.round(totalMinutes / 5) * 5;
+    
+    const hours = Math.floor(roundedMinutes / 60);
+    const minutes = roundedMinutes % 60;
+    
+    return `${hours}:${minutes.toString().padStart(2, '0')}`;
   };
 
   // Calculate sunshine hours from condition
@@ -333,10 +364,22 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     return '6-8';
   };
 
-  // Check if we need dark text (for cold/light backgrounds like snow)
+  // Check if we need dark text (for cold/light backgrounds like snow or sunny+freezing)
   const needsDarkText = () => {
     const condition = forecast.condition?.toLowerCase() || '';
-    return condition.includes('snow') || condition.includes('ice') || condition.includes('freezing');
+    const temp = forecast.temperature;
+    
+    // Snow/ice conditions always need dark text
+    if (condition.includes('snow') || condition.includes('ice') || condition.includes('freezing')) {
+      return true;
+    }
+    
+    // Sunny but freezing (< 0°C) also uses light blue background → dark text
+    if (condition === 'sunny' && temp !== null && temp !== undefined && temp < 0) {
+      return true;
+    }
+    
+    return false;
   };
 
   const useDarkText = needsDarkText();
@@ -345,7 +388,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { backgroundColor: getWeatherColor(forecast.condition) }]}>
+      <View style={[styles.header, { backgroundColor: getWeatherColor(forecast.condition, forecast.temperature) }]}>
         {/* Großes Hintergrund-Icon */}
         <Text style={styles.headerBgIcon}>{getWeatherIcon(forecast.condition)}</Text>
         
@@ -382,7 +425,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{t('destination.wind')}</Text>
-              <Text style={[styles.statValue, { color: theme.text }]}>{forecast.windSpeed || 0} km/h</Text>
+              <Text style={[styles.statValue, { color: theme.text }]}>{getWindDescription(forecast.windSpeed)}</Text>
             </View>
           </View>
         </View>
@@ -427,13 +470,13 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               // Get summary text for collapsed state
               const getSummaryText = () => {
                 if (isWorthTheDrive && worthData) {
-                  return `+${worthData.tempDelta}°C | ${Math.round(destination.distance)}km | +${worthData.delta} Pkt`;
+                  return `+${worthData.tempDelta}°C | ${Math.round(destination.distance)}km`;
                 }
                 if (isWorthTheDriveBudget && worthBudgetData) {
-                  return `+${worthBudgetData.tempDelta}°C | ${Math.round(destination.distance)}km | +${worthBudgetData.delta} Pkt`;
+                  return `+${worthBudgetData.tempDelta}°C | ${Math.round(destination.distance)}km`;
                 }
                 if (isWarmAndDry && warmDryData) {
-                  return `${warmDryData.temp}°C | ${warmDryData.condition}`;
+                  return `${warmDryData.temp}°C | ${translateCondition(warmDryData.condition)}`;
                 }
                 if (isBeachParadise && beachData) {
                   return `${beachData.temp}°C | ${beachData.sunnyDays} Sonnentage`;
@@ -442,7 +485,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                   return `${sunnyStreakData.streakLength} Tage ☀️ | Ø ${sunnyStreakData.avgTemp}°C`;
                 }
                 if (isWeatherMiracle && miracleData) {
-                  return `+${miracleData.tempDelta}°C | +${miracleData.improvement} Pkt`;
+                  return `+${miracleData.tempGain}°C bald ☀️`;
                 }
                 if (isHeatwave && heatwaveData) {
                   return `${heatwaveData.days} Tage 🔥 | Ø ${heatwaveData.avgTemp}°C`;
@@ -549,13 +592,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                             🌡️ Temperatur: {worthData.tempOrigin}°C → {worthData.tempDest}°C (+{worthData.tempDelta}°C)
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            💨 ETA: {worthData.eta}h ({Math.round(destination.distance)}km)
-                          </Text>
-                          <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            📈 Wetter-Gewinn: +{worthData.delta} Punkte
-                          </Text>
-                          <Text style={[styles.badgeStat, { color: metadata.color }]}>
-                            ⭐ Value Score: {worthData.value} pts/h
+                            💨 ETA: {formatETA(worthData.eta)} ({Math.round(destination.distance)}km)
                           </Text>
                         </View>
                       )}
@@ -567,13 +604,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                             🌡️ Temperatur: {worthBudgetData.tempOrigin}°C → {worthBudgetData.tempDest}°C (+{worthBudgetData.tempDelta}°C)
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            💨 ETA: {worthBudgetData.eta}h ({Math.round(destination.distance)}km)
-                          </Text>
-                          <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            📈 Wetter-Gewinn: +{worthBudgetData.delta} Punkte
-                          </Text>
-                          <Text style={[styles.badgeStat, { color: metadata.color }]}>
-                            ⭐ Value Score: {worthBudgetData.value} pts/h
+                            💨 ETA: {formatETA(worthBudgetData.eta)} ({Math.round(destination.distance)}km)
                           </Text>
                         </View>
                       )}
@@ -585,10 +616,10 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                             🌡️ Temperatur: {warmDryData.temp}°C (Rang #{warmDryData.tempRank})
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            ☀️ Bedingungen: {warmDryData.condition}
+                            ☀️ Bedingungen: {translateCondition(warmDryData.condition)}
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            💨 Wind: {warmDryData.windSpeed} km/h
+                            💨 {getWindDescription(warmDryData.windSpeed)}
                           </Text>
                         </View>
                       )}
@@ -603,7 +634,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                             ☀️ {beachData.sunnyDays} sonnige Tage
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            💨 Wind: {beachData.windSpeed} km/h
+                            💨 {getWindDescription(beachData.windSpeed)}
                           </Text>
                         </View>
                       )}
@@ -624,13 +655,10 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {isWeatherMiracle && miracleData && (
                         <View style={styles.badgeStats}>
                           <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
-                            🌡️ Temperatur: {miracleData.tempOrigin}°C → {miracleData.tempDest}°C (+{miracleData.tempDelta}°C)
+                            🌡️ Heute: {miracleData.todayTemp}°C → Bald: {miracleData.futureTempMax}°C (+{miracleData.tempGain}°C)
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
-                            ☀️ {miracleData.conditionOrigin} → {miracleData.conditionDest}
-                          </Text>
-                          <Text style={[styles.badgeStat, { color: metadata.color }]}>
-                            ⚡ Verbesserung: {miracleData.improvement} Punkte
+                            ☀️ {translateCondition(miracleData.todayCondition)} → {miracleData.futureCondition}
                           </Text>
                         </View>
                       )}
@@ -678,10 +706,10 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {isWeatherCurse && weatherCurseData && (
                         <View style={styles.badgeStats}>
                           <Text style={[styles.badgeStat, { color: '#4CAF50' }]}>
-                            ☀️ Heute: {weatherCurseData.todayTemp}°C, {weatherCurseData.todayCondition}
+                            ☀️ Heute: {weatherCurseData.todayTemp}°C, {translateCondition(weatherCurseData.todayCondition)}
                           </Text>
                           <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
-                            ⚠️ Bald: {weatherCurseData.futureTempMin}°C, {weatherCurseData.futureCondition} (-{weatherCurseData.tempLoss}°C!)
+                            ⚠️ Bald: {weatherCurseData.futureTempMin}°C, {translateCondition(weatherCurseData.futureCondition)} (-{weatherCurseData.tempLoss}°C!)
                           </Text>
                         </View>
                       )}
