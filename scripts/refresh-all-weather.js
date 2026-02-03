@@ -19,9 +19,10 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
 const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
-const BATCH_SIZE = 10; // Process 10 locations in parallel (reduced for stability)
-const RATE_LIMIT_DELAY = 5000; // 5s between batches (be nice to free API)
-const MAX_RETRIES = 2; // Retry failed places up to 2 times
+const BATCH_SIZE = 50; // Process 50 locations in parallel (Open-Meteo can handle it)
+const RATE_LIMIT_DELAY = 200; // 200ms between batches
+const MAX_RETRIES = 1; // Retry failed places once
+const FETCH_TIMEOUT = 10000; // 10s timeout per request
 
 /**
  * Weather code mapping
@@ -106,18 +107,32 @@ async function fetchWeather(place) {
       'sunset',
       'sunshine_duration',
     ].join(','),
-    forecast_days: 14, // 14 days as requested
+    forecast_days: 14,
     timezone: 'auto',
   });
 
   const url = `${OPEN_METEO_BASE_URL}/forecast?${params}`;
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+  
+  // Add timeout using AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout');
+    }
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
@@ -323,7 +338,7 @@ async function main() {
       if (allFailedPlaces.length === 0) break;
       
       console.log(`\n🔄 Retry ${retry}/${MAX_RETRIES}: ${allFailedPlaces.length} failed places...`);
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * 2)); // Extra delay before retry
+      await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay before retry
       
       const retryBatches = [];
       for (let i = 0; i < allFailedPlaces.length; i += BATCH_SIZE) {
