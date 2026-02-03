@@ -284,8 +284,18 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     });
   }
   
-  // "Warm & Dry" badges: NO LIMIT - all qualifying destinations get it
-  // (no filtering needed, they all keep their badge)
+  // Limit "Warm & Dry" badges to top 10 warmest destinations
+  const MAX_WARM_DRY_BADGES = 10;
+  
+  const warmDryCandidates = destinations
+    .filter(d => !d.isCurrentLocation && d.badges.includes('WARM_AND_DRY'))
+    .sort((a, b) => (b.temperature || 0) - (a.temperature || 0)); // Warmest first
+  
+  if (warmDryCandidates.length > MAX_WARM_DRY_BADGES) {
+    warmDryCandidates.slice(MAX_WARM_DRY_BADGES).forEach(dest => {
+      dest.badges = dest.badges.filter(b => b !== 'WARM_AND_DRY');
+    });
+  }
   
   const destWithBadges = destinations.filter(d => d.badges && d.badges.length > 0);
   const totalBadges = destWithBadges.reduce((sum, d) => sum + d.badges.length, 0);
@@ -294,7 +304,7 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
   
   console.log(
     `🏆 Awarded ${totalBadges} badges to ${destWithBadges.length} destinations ` +
-    `(🚗 Worth: ${worthCount}/${worthTheDriveCandidates.length} limited, ☀️ Warm&Dry: ${warmDryCount} unlimited)`
+    `(🚗 Worth: ${worthCount}/${worthTheDriveCandidates.length} limited, ☀️ Warm&Dry: ${warmDryCount}/${warmDryCandidates.length} max 10)`
   );
 };
 

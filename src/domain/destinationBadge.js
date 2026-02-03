@@ -146,6 +146,62 @@ export function getWeatherScoreAtETA(destination, eta) {
 }
 
 /**
+ * Check if weather deteriorates significantly in the next 2-3 days
+ * Returns true if average temp drops by more than threshold
+ * 
+ * @param {Object} destination - Destination with forecast data
+ * @param {number} threshold - Max allowed temp drop (default 4°C)
+ * @returns {Object} - { isDeteriorating, avgTempDrop }
+ */
+export function checkWeatherDeterioration(destination, threshold = 4) {
+  const currentTemp = destination.temperature ?? 0;
+  const forecast = destination.forecast;
+  
+  if (!forecast) {
+    console.log(`⚠️ ${destination.name}: No forecast data for deterioration check`);
+    return { isDeteriorating: false, avgTempDrop: 0 };
+  }
+  
+  // Get temps for tomorrow, day2, and day3 (use all available)
+  const tomorrowTemp = forecast.tomorrow?.temp ?? forecast.tomorrow?.high ?? null;
+  const day2Temp = forecast.day2?.temp ?? forecast.day2?.high ?? null;
+  const day3Temp = forecast.day3?.temp ?? forecast.day3?.high ?? null;
+  
+  // Collect all available future temps
+  const futureTemps = [tomorrowTemp, day2Temp, day3Temp].filter(t => t !== null);
+  
+  if (futureTemps.length === 0) {
+    console.log(`⚠️ ${destination.name}: No future temps in forecast`);
+    return { isDeteriorating: false, avgTempDrop: 0 };
+  }
+  
+  // Calculate average future temp
+  const avgFutureTemp = futureTemps.reduce((sum, t) => sum + t, 0) / futureTemps.length;
+  const avgTempDrop = currentTemp - avgFutureTemp;
+  
+  // Also check the minimum (worst case)
+  const minFutureTemp = Math.min(...futureTemps);
+  const maxTempDrop = currentTemp - minFutureTemp;
+  
+  // Deteriorating if AVERAGE drops by more than threshold
+  const isDeteriorating = avgTempDrop > threshold;
+  
+  console.log(`🌡️ ${destination.name}: Deterioration check - ` +
+    `Today: ${currentTemp}°C, Future avg: ${avgFutureTemp.toFixed(1)}°C (min: ${minFutureTemp}°C), ` +
+    `Drop: ${avgTempDrop.toFixed(1)}°C (max: ${maxTempDrop.toFixed(1)}°C) → ${isDeteriorating ? '❌ DETERIORATING' : '✓ OK'}`
+  );
+  
+  return {
+    isDeteriorating,
+    avgTempDrop: Math.round(avgTempDrop * 10) / 10,
+    maxTempDrop: Math.round(maxTempDrop * 10) / 10,
+    currentTemp: Math.round(currentTemp),
+    avgFutureTemp: Math.round(avgFutureTemp * 10) / 10,
+    minFutureTemp: Math.round(minFutureTemp),
+  };
+}
+
+/**
  * Calculate "Worth the Drive" value score
  * 
  * @param {Object} destination - Destination to evaluate
@@ -271,13 +327,16 @@ export function calculateWarmAndDry(destination, allDestinations) {
   const precipitation = destination.precipitation ?? 0;
   const forecast = destination.forecast;
   
-  // Criteria
-  const MIN_TEMP = 18; // Must be at least 18°C (pleasantly warm)
+  // Criteria - seasonal temperature threshold
+  const month = new Date().getMonth() + 1;
+  const MIN_TEMP = month >= 6 && month <= 8 ? 28 : 22; // 28°C in summer (Jun-Aug), 22°C otherwise
   const MAX_WIND = 30; // Max wind speed in km/h
+  const MAX_PRECIPITATION = 2; // Max 2mm precipitation
   const BAD_CONDITIONS = ['rainy', 'snowy']; // Conditions that disqualify
   
   // Check today's conditions
   const isWarm = temp >= MIN_TEMP;
+  const isPrecipitationLow = precipitation < MAX_PRECIPITATION;
   const isTodayDry = !BAD_CONDITIONS.includes(condition);
   const isCalm = windSpeed <= MAX_WIND;
   
@@ -317,26 +376,33 @@ export function calculateWarmAndDry(destination, allDestinations) {
     d.lat === destination.lat && d.lon === destination.lon
   ) + 1;
   
-  // Award to ALL destinations that meet the criteria (no rank limit)
-  const shouldAward = isWarm && isDry && isCalm;
+  // Award to destinations that meet the criteria (limited to top 10 warmest in usecases)
+  const shouldAward = isWarm && isDry && isCalm && isPrecipitationLow;
   
   // Debug logging for places that almost qualify
   if (isWarm && isCalm && !isDry) {
     console.log(`❌ ${destination.name}: Warm & Calm but NOT dry! ` +
       `Today: ${condition}, Forecast rainy days: ${forecastRainyDays}/3`);
   }
+  if (isWarm && isCalm && isDry && !isPrecipitationLow) {
+    console.log(`❌ ${destination.name}: Warm & Calm & Dry but too much precipitation! ` +
+      `Precipitation: ${precipitation}mm (max: ${MAX_PRECIPITATION}mm)`);
+  }
   
   return {
     isWarm,
     isDry,
     isCalm,
+    isPrecipitationLow,
     isForecastDry,
     forecastRainyDays,
     shouldAward,
     tempRank,
     temp,
+    precipitation,
     windSpeed,
     condition,
+    threshold: MIN_TEMP, // Include threshold for display purposes
   };
 }
 
@@ -460,7 +526,7 @@ export function calculateWeatherMiracle(destination) {
 
 /**
  * Calculate "Heatwave" eligibility
- * 3+ days above 32°C with no rain
+ * 3+ days above 34°C with no rain
  * 
  * @param {Object} destination - Destination with forecast data
  * @returns {Object} - { shouldAward, hotDays, maxTemp }
@@ -470,19 +536,21 @@ export function calculateHeatwave(destination) {
   const currentCondition = destination.condition ?? 'unknown';
   const forecast = destination.forecast;
   
+  const MIN_HEATWAVE_TEMP = 34; // Minimum temperature for heatwave
+  
   // Check for rain conditions
   const hasRain = currentCondition === 'rainy' || 
                   forecast?.today?.condition === 'rainy' ||
                   forecast?.tomorrow?.condition === 'rainy' ||
                   forecast?.day3?.condition === 'rainy';
   
-  let hotDays = currentTemp >= 32 ? 1 : 0;
+  let hotDays = currentTemp >= MIN_HEATWAVE_TEMP ? 1 : 0;
   let maxTemp = currentTemp;
   
   if (forecast) {
-    if (forecast.today?.high >= 32) hotDays++;
-    if (forecast.tomorrow?.high >= 32) hotDays++;
-    if (forecast.day3?.high >= 32) hotDays++;
+    if (forecast.today?.high >= MIN_HEATWAVE_TEMP) hotDays++;
+    if (forecast.tomorrow?.high >= MIN_HEATWAVE_TEMP) hotDays++;
+    if (forecast.day3?.high >= MIN_HEATWAVE_TEMP) hotDays++;
     
     maxTemp = Math.max(
       maxTemp,
@@ -492,7 +560,7 @@ export function calculateHeatwave(destination) {
     );
   }
   
-  // Badge criteria: 3+ days > 32°C AND no rain
+  // Badge criteria: 3+ days >= 34°C AND no rain
   const MIN_HOT_DAYS = 3;
   const shouldAward = hotDays >= MIN_HOT_DAYS && !hasRain;
   
@@ -507,16 +575,25 @@ export function calculateHeatwave(destination) {
  * Calculate "Snow King" eligibility
  * Reliable snow conditions - perfect for skiing
  * 
+ * RULES:
+ * - Population > 150k excluded (large cities out, but medium OK)
+ * - No elevation requirement (snow can be anywhere)
+ * - Winter only (Nov-Mar), except high Alps >2000m
+ * - 3 paths to qualify (see below)
+ * - Max 10 badges, max 3 per country, sorted by snow (60%) + cold (40%)
+ * 
  * @param {Object} destination - Destination with forecast and snowfall data
- * @returns {Object} - { shouldAward, snowDays, snowfallAmount, avgTemp, reason }
+ * @returns {Object} - { shouldAward, snowDays, snowfallAmount, avgTemp, reason, score, country }
  */
 export function calculateSnowKing(destination) {
   const currentCondition = destination.condition ?? 'unknown';
   const currentTemp = destination.temperature ?? 0;
   const population = destination.population ?? 0;
+  const elevation = destination.elevation ?? 0;
+  const country = destination.country || destination.countryCode || '';
   
-  // Exclude large cities (over 200k population) - skiing is for mountain villages!
-  const MAX_POPULATION = 200000;
+  // Exclude large cities (over 150k population)
+  const MAX_POPULATION = 150000;
   if (population > MAX_POPULATION) {
     return {
       shouldAward: false,
@@ -525,7 +602,29 @@ export function calculateSnowKing(destination) {
       maxTemp: currentTemp,
       minTemp: currentTemp,
       avgTemp: currentTemp,
-      reason: `City too large (${population.toLocaleString()} population) - Snow King is for ski resorts!`,
+      score: 0,
+      country,
+      reason: `City too large (${population.toLocaleString()} population)`,
+    };
+  }
+  
+  // Season check: Winter = Nov-Mar (months 11, 12, 1, 2, 3)
+  const month = new Date().getMonth() + 1;
+  const isWinter = month >= 11 || month <= 3;
+  const isHighAlps = elevation >= 2000;
+  
+  // Summer: No badge except high Alps >2000m
+  if (!isWinter && !isHighAlps) {
+    return {
+      shouldAward: false,
+      snowDays: 0,
+      snowfallAmount: 0,
+      maxTemp: currentTemp,
+      minTemp: currentTemp,
+      avgTemp: currentTemp,
+      score: 0,
+      country,
+      reason: `Summer season (Apr-Oct) - only high Alps >2000m qualify`,
     };
   }
   
@@ -533,7 +632,9 @@ export function calculateSnowKing(destination) {
   const snowfall1h = destination.snowfall1h || 0;
   const snowfall3h = destination.snowfall3h || 0;
   const snowfall24h = destination.snowfall24h || 0;
-  const totalSnowfall = Math.max(snowfall1h, snowfall3h / 3, snowfall24h / 24);
+  
+  // Calculate total snowfall from forecast
+  let totalSnowfall = snowfall24h;
   
   // Check forecast if available
   const forecast = destination.forecast;
@@ -544,27 +645,46 @@ export function calculateSnowKing(destination) {
   let tempCount = 1;
   
   if (forecast) {
-    // Count snowy days in forecast
-    if (forecast.today?.condition === 'snowy') snowDays++;
-    if (forecast.tomorrow?.condition === 'snowy') snowDays++;
-    if (forecast.day3?.condition === 'snowy') snowDays++;
+    // Count snowy days in forecast and accumulate snowfall
+    if (forecast.today?.condition === 'snowy') {
+      snowDays++;
+      totalSnowfall += forecast.today?.precipitation || 0;
+    }
+    if (forecast.tomorrow?.condition === 'snowy') {
+      snowDays++;
+      totalSnowfall += forecast.tomorrow?.precipitation || 0;
+    }
+    if (forecast.day2?.condition === 'snowy') {
+      snowDays++;
+      totalSnowfall += forecast.day2?.precipitation || 0;
+    }
+    if (forecast.day3?.condition === 'snowy') {
+      snowDays++;
+      totalSnowfall += forecast.day3?.precipitation || 0;
+    }
     
     // Calculate temperature stats
-    if (forecast.today?.high) {
+    if (forecast.today?.high != null) {
       maxTemp = Math.max(maxTemp, forecast.today.high);
-      minTemp = Math.min(minTemp, forecast.today.low || forecast.today.high);
+      minTemp = Math.min(minTemp, forecast.today.low ?? forecast.today.high);
       avgTemp += forecast.today.high;
       tempCount++;
     }
-    if (forecast.tomorrow?.high) {
+    if (forecast.tomorrow?.high != null) {
       maxTemp = Math.max(maxTemp, forecast.tomorrow.high);
-      minTemp = Math.min(minTemp, forecast.tomorrow.low || forecast.tomorrow.high);
+      minTemp = Math.min(minTemp, forecast.tomorrow.low ?? forecast.tomorrow.high);
       avgTemp += forecast.tomorrow.high;
       tempCount++;
     }
-    if (forecast.day3?.high) {
+    if (forecast.day2?.high != null) {
+      maxTemp = Math.max(maxTemp, forecast.day2.high);
+      minTemp = Math.min(minTemp, forecast.day2.low ?? forecast.day2.high);
+      avgTemp += forecast.day2.high;
+      tempCount++;
+    }
+    if (forecast.day3?.high != null) {
       maxTemp = Math.max(maxTemp, forecast.day3.high);
-      minTemp = Math.min(minTemp, forecast.day3.low || forecast.day3.high);
+      minTemp = Math.min(minTemp, forecast.day3.low ?? forecast.day3.high);
       avgTemp += forecast.day3.high;
       tempCount++;
     }
@@ -572,40 +692,43 @@ export function calculateSnowKing(destination) {
   
   avgTemp = avgTemp / tempCount;
   
-  // STRICT CRITERIA - Snow King = EXCLUSIVE!
+  // === WINTER PATHS (Nov-Mar) ===
   
-  // Path 1: Heavy snowfall + cold enough (won't melt)
-  const MIN_SNOWFALL_PATH1 = 10; // At least 10mm/24h snow
-  const MAX_AVG_TEMP_PATH1 = 0; // Average <= 0°C (won't melt!)
-  const MAX_MAX_TEMP_PATH1 = 3; // Max temp <= 3°C
-  const path1 = snowfall24h >= MIN_SNOWFALL_PATH1 && avgTemp <= MAX_AVG_TEMP_PATH1 && maxTemp <= MAX_MAX_TEMP_PATH1;
+  // Path 1 (Heavy Snow): ≥20mm snow/24h, avg ≤2°C
+  const path1 = snowfall24h >= 20 && avgTemp <= 2;
   
-  // Path 2: Multiple snowy days + cold enough
-  const MIN_SNOW_DAYS_PATH2 = 2; // At least 2 days of snow
-  const MAX_AVG_TEMP_PATH2 = -2; // Average <= -2°C (won't melt!)
-  const MAX_MAX_TEMP_PATH2 = 2; // Max temp <= 2°C
-  const path2 = snowDays >= MIN_SNOW_DAYS_PATH2 && avgTemp <= MAX_AVG_TEMP_PATH2 && maxTemp <= MAX_MAX_TEMP_PATH2;
+  // Path 2 (Consistent Snow): ≥3 snow days, ≥10mm total, avg ≤0°C
+  const path2 = snowDays >= 3 && totalSnowfall >= 10 && avgTemp <= 0;
   
-  // Path 3: Extremely cold + guaranteed snow
-  const MIN_SNOW_DAYS_PATH3 = 1; // At least 1 day of snow
-  const MAX_AVG_TEMP_PATH3 = -5; // Average <= -5°C (EXTREMELY cold!)
-  const MAX_MAX_TEMP_PATH3 = -1; // Max temp <= -1°C (always below freezing)
-  const path3 = snowDays >= MIN_SNOW_DAYS_PATH3 && avgTemp <= MAX_AVG_TEMP_PATH3 && maxTemp <= MAX_MAX_TEMP_PATH3;
+  // Path 3 (Cold + Snow): ≥1 snow day, avg ≤-5°C, max ≤-1°C
+  const path3 = snowDays >= 1 && avgTemp <= -5 && maxTemp <= -1;
   
   const shouldAward = path1 || path2 || path3;
   
+  // Calculate score for sorting: Snow (60%) + Cold (40%)
+  // Normalize: snowfall max ~50mm = 100 points, temp min ~-20°C = 100 points
+  const snowScore = Math.min(100, (totalSnowfall / 50) * 100) * 0.6;
+  const coldScore = Math.min(100, Math.max(0, (10 - avgTemp) / 30) * 100) * 0.4;
+  const score = Math.round((snowScore + coldScore) * 10) / 10;
+  
   let reason = '';
-  if (path1) reason = `${snowfall24h.toFixed(1)}mm snow/24h + Avg ${avgTemp.toFixed(1)}°C (won't melt!)`;
-  else if (path2) reason = `${snowDays} snowy days + Avg ${avgTemp.toFixed(1)}°C (won't melt!)`;
-  else if (path3) reason = `Extremely cold: Avg ${avgTemp.toFixed(1)}°C, Max ${maxTemp}°C (guaranteed snow!)`;
+  if (path1) reason = `Heavy: ${snowfall24h.toFixed(0)}mm/24h, Ø${avgTemp.toFixed(1)}°C`;
+  else if (path2) reason = `Consistent: ${snowDays} Tage, ${totalSnowfall.toFixed(0)}mm, Ø${avgTemp.toFixed(1)}°C`;
+  else if (path3) reason = `Freezing: Ø${avgTemp.toFixed(1)}°C, Max ${maxTemp.toFixed(0)}°C`;
+  
+  if (isHighAlps && !isWinter) {
+    reason += ' (Hochalpen)';
+  }
   
   return {
     shouldAward,
     snowDays,
-    snowfallAmount: snowfall24h,
+    snowfallAmount: totalSnowfall,
     maxTemp,
     minTemp,
     avgTemp: Math.round(avgTemp * 10) / 10,
+    score,
+    country,
     reason,
   };
 }
@@ -668,7 +791,12 @@ export function calculateRainyDays(destination) {
 
 /**
  * Calculate "Weather Curse" eligibility
- * Good weather now but will turn bad soon (opposite of Weather Miracle)
+ * Good & warm weather now but will turn bad soon (opposite of Weather Miracle)
+ * 
+ * Criteria:
+ * - Today: > 10°C AND good weather (sunny/cloudy/overcast)
+ * - Tomorrow/Day3: bad weather (rainy/snowy/windy)
+ * - Temp loss >= 5°C
  * 
  * @param {Object} destination - Destination with forecast data
  * @returns {Object} - { shouldAward, todayCondition, futureCondition, tempLoss }
@@ -682,10 +810,13 @@ export function calculateWeatherCurse(destination) {
     return { shouldAward: false };
   }
   
-  // Check for transformation: good today → bad tomorrow/day3
-  const GOOD_CONDITIONS = ['sunny', 'cloudy'];
+  // Prerequisite: Today must be warm (> 10°C) AND good weather
+  const MIN_TODAY_TEMP = 10;
+  const GOOD_CONDITIONS = ['sunny', 'cloudy', 'overcast'];
+  const isWarmToday = todayTemp > MIN_TODAY_TEMP;
   const isGoodToday = GOOD_CONDITIONS.includes(todayCondition);
   
+  // Future: bad weather
   const BAD_CONDITIONS = ['rainy', 'snowy', 'windy'];
   const tomorrowBad = BAD_CONDITIONS.includes(forecast.tomorrow?.condition);
   const day3Bad = BAD_CONDITIONS.includes(forecast.day3?.condition);
@@ -695,9 +826,10 @@ export function calculateWeatherCurse(destination) {
   const futureTempMin = Math.min(tomorrowTemp, day3Temp);
   const tempLoss = todayTemp - futureTempMin;
   
-  // Badge criteria: good today AND bad future AND colder
-  const MIN_TEMP_LOSS = 5; // Must get colder by at least 5°C
+  // Badge criteria: warm + good today AND bad future AND ≥5°C colder
+  const MIN_TEMP_LOSS = 5;
   const shouldAward = (
+    isWarmToday &&
     isGoodToday &&
     (tomorrowBad || day3Bad) &&
     tempLoss >= MIN_TEMP_LOSS
@@ -705,21 +837,23 @@ export function calculateWeatherCurse(destination) {
   
   // Debug logging for Weather Curse candidates
   if (isGoodToday && (tomorrowBad || day3Bad)) {
+    const reason = !isWarmToday ? `TOO COLD (${todayTemp}°C ≤ ${MIN_TODAY_TEMP}°C)` :
+                   tempLoss < MIN_TEMP_LOSS ? `NOT ENOUGH TEMP LOSS (${tempLoss}°C < ${MIN_TEMP_LOSS}°C)` : 'OK';
     console.log(`🔮 ${destination.name}: Weather Curse candidate! ` +
       `Today: ${todayCondition} ${todayTemp}°C, ` +
       `Tomorrow: ${forecast.tomorrow?.condition || 'N/A'} ${tomorrowTemp}°C, ` +
       `Day3: ${forecast.day3?.condition || 'N/A'} ${day3Temp}°C, ` +
-      `TempLoss: ${tempLoss}°C (need ${MIN_TEMP_LOSS}°C) → ${shouldAward ? '✅ AWARD' : '❌ NOT ENOUGH TEMP LOSS'}`
+      `TempLoss: ${tempLoss}°C → ${shouldAward ? '✅ AWARD' : `❌ ${reason}`}`
     );
   }
   
   return {
     shouldAward,
     todayCondition,
-    todayTemp,
+    todayTemp: Math.round(todayTemp),
     futureCondition: tomorrowBad ? forecast.tomorrow?.condition : forecast.day3?.condition,
-    futureTempMin,
-    tempLoss,
+    futureTempMin: Math.round(futureTempMin),
+    tempLoss: Math.round(tempLoss),
   };
 }
 
@@ -809,10 +943,37 @@ export function calculateSpringAwakening(destination, origin, distanceKm) {
 export function calculateBadges(destination, userLocation, distanceKm, allDestinations = []) {
   const badges = [];
 
+  // === PRE-CHECK: Weather Curse & Deterioration ===
+  // Calculate Weather Curse early (needed for Worth the Drive exclusion)
+  const weatherCurseResult = calculateWeatherCurse(destination);
+  destination._weatherCurseData = weatherCurseResult;
+  const hasWeatherCurse = weatherCurseResult.shouldAward;
+  
+  // Check weather deterioration (>4°C drop in next 2 days average)
+  const deteriorationResult = checkWeatherDeterioration(destination, 4);
+  destination._weatherDeteriorationData = deteriorationResult;
+  const isDeterioritating = deteriorationResult.isDeteriorating;
+  
+  // Flag: Skip Worth the Drive badges if weather is getting worse
+  const skipWorthTheDrive = hasWeatherCurse || isDeterioritating;
+  
+  if (skipWorthTheDrive) {
+    console.log(`⚠️ ${destination.name}: Skipping Worth the Drive - ` +
+      `${hasWeatherCurse ? 'Weather Curse' : ''} ` +
+      `${isDeterioritating ? `Deteriorating (${deteriorationResult.avgTempDrop}°C drop)` : ''}`
+    );
+  }
+
   // 1. Worth the Drive Budget - RANKING SYSTEM (PRIORITY 1!)
   // Calculate efficiency for this destination
   const budgetResult = calculateWorthTheDriveBudget(destination, userLocation, distanceKm);
   destination._worthTheDriveBudgetData = budgetResult;
+  
+  // Mark as ineligible if weather is deteriorating
+  if (skipWorthTheDrive) {
+    budgetResult.isEligible = false;
+    budgetResult.skipReason = hasWeatherCurse ? 'Weather Curse' : 'Weather deteriorating';
+  }
   
   // Badge is awarded later after comparing all destinations (see below)
 
@@ -820,7 +981,8 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
   const worthResult = calculateWorthTheDrive(destination, userLocation, distanceKm);
   destination._worthTheDriveData = worthResult;
   
-  if (worthResult.shouldAward) {
+  // Only award if not skipped due to weather issues
+  if (worthResult.shouldAward && !skipWorthTheDrive) {
     badges.push(DestinationBadge.WORTH_THE_DRIVE);
     console.log(
       `🚗 ${destination.name}: Worth it! ` +
@@ -829,6 +991,8 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
       `Value: ${worthResult.value} pts/h, ` +
       `ETA: ${worthResult.eta}h (${Math.round(distanceKm)}km)`
     );
+  } else if (worthResult.shouldAward && skipWorthTheDrive) {
+    console.log(`🚗❌ ${destination.name}: Would qualify for Worth the Drive but skipped due to weather issues`);
   }
 
   // 3. Warm & Dry
@@ -922,10 +1086,8 @@ export function calculateBadges(destination, userLocation, distanceKm, allDestin
     );
   }
 
-  // 10. Weather Curse
-  const weatherCurseResult = calculateWeatherCurse(destination);
-  destination._weatherCurseData = weatherCurseResult;
-  
+  // 10. Weather Curse (already calculated at beginning for Worth the Drive check)
+  // Just award the badge if it qualifies
   if (weatherCurseResult.shouldAward) {
     badges.push(DestinationBadge.WEATHER_CURSE);
     console.log(

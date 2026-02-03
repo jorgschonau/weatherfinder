@@ -54,6 +54,13 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     .filter(d => !d.isCurrentLocation && d._worthTheDriveBudgetData?.isEligible)
     .sort((a, b) => (b._worthTheDriveBudgetData?.efficiency || 0) - (a._worthTheDriveBudgetData?.efficiency || 0));
   
+  // DEBUG: Show top 10 candidates
+  console.log(`💰 DEBUG Budget Candidates (top 10 of ${budgetCandidates.length}):`);
+  budgetCandidates.slice(0, 10).forEach((c, i) => {
+    const data = c._worthTheDriveBudgetData;
+    console.log(`  ${i+1}. ${c.name}: eff=${data.efficiency.toFixed(4)}, temp=${c.temperature}°C, delta=+${data.tempDelta}°C, dist=${data.distance}km`);
+  });
+  
   // Award badge ONLY to the best one
   if (budgetCandidates.length > 0) {
     const winner = budgetCandidates[0];
@@ -157,13 +164,44 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
   
   console.log(`☀️ Sunny Streak: ${sunnyCandidates.length} → ${selectedSunny.length} (max 10, min 20km apart)`);
   
-  // Limit Snow King: max 10, by COLDEST temp (min) + attractiveness
+  // Limit Snow King: max 10 total, max 3 per country, sorted by score (60% snow + 40% cold)
+  const MAX_SNOW_PER_COUNTRY = 3;
   const snowCandidates = destinations
     .filter(d => d.badges?.includes('SNOW_KING'))
-    .sort((a, b) => getScore(b, true) - getScore(a, true)); // tempAsc = true (coldest first)
-  if (snowCandidates.length > MAX_OTHER_BADGES) {
-    snowCandidates.slice(MAX_OTHER_BADGES).forEach(d => {
+    .sort((a, b) => (b._snowKingData?.score || 0) - (a._snowKingData?.score || 0)); // By score (snow 60% + cold 40%)
+  
+  // Select max 10, with max 3 per country
+  const selectedSnow = [];
+  const countryCount = {};
+  
+  for (const candidate of snowCandidates) {
+    if (selectedSnow.length >= MAX_OTHER_BADGES) break;
+    
+    const country = candidate._snowKingData?.country || candidate.country || candidate.countryCode || 'unknown';
+    countryCount[country] = (countryCount[country] || 0);
+    
+    if (countryCount[country] < MAX_SNOW_PER_COUNTRY) {
+      selectedSnow.push(candidate);
+      countryCount[country]++;
+    }
+  }
+  
+  // Remove badge from non-selected
+  snowCandidates.forEach(d => {
+    if (!selectedSnow.includes(d)) {
       d.badges = d.badges.filter(b => b !== 'SNOW_KING');
+    }
+  });
+  
+  console.log(`⛄ Snow King: ${snowCandidates.length} → ${selectedSnow.length} (max 10, max 3/country, by score)`);
+  
+  // Limit Warm & Dry: max 10, by warmest temperature
+  const warmDryCandidates = destinations
+    .filter(d => d.badges?.includes('WARM_AND_DRY'))
+    .sort((a, b) => (b.temperature || 0) - (a.temperature || 0)); // Warmest first
+  if (warmDryCandidates.length > MAX_OTHER_BADGES) {
+    warmDryCandidates.slice(MAX_OTHER_BADGES).forEach(d => {
+      d.badges = d.badges.filter(b => b !== 'WARM_AND_DRY');
     });
   }
   
@@ -182,12 +220,12 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     `🏆 Awarded ${totalBadges} badges to ${destWithBadges.length} destinations:\n` +
     `  💰 Budget: ${budgetCount}/${budgetCandidates.length} (TOP 1 ONLY)\n` +
     `  🚗 Worth: ${worthCount}/${worthTheDriveCandidates.length} (max 3, min 20km apart)\n` +
-    `  ☀️ Warm&Dry: ${warmDryCount} (unlimited)\n` +
+    `  ☀️ Warm&Dry: ${warmDryCount}/${warmDryCandidates.length} (max 10, warmest)\n` +
     `  🌊 Beach: ${beachCount}/${beachCandidates.length} (max 10)\n` +
     `  ☀️ Sunny: ${sunnyCount}/${sunnyCandidates.length} (max 10)\n` +
     `  🌈 Miracle: ${miracleCount} (unlimited)\n` +
     `  🔥 Heatwave: ${heatwaveCount} (unlimited)\n` +
-    `  ⛄ Snow: ${snowCount}/${snowCandidates.length} (max 10, coldest)`
+    `  ⛄ Snow: ${snowCount}/${snowCandidates.length} (max 10, max 3/country)`
   );
 };
 
@@ -219,6 +257,33 @@ export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCon
     : places;
 
   console.log(`🔍 After filter: ${filteredPlaces.length} places`);
+  
+  // Limit markers from small/distant countries if user is NOT in these countries
+  // This prevents Caribbean islands etc. from flooding the map
+  const SMALL_COUNTRIES = ['CU', 'DO', 'JM', 'HT', 'LU', 'MT', 'CY'];
+  const MAX_PER_SMALL_COUNTRY = 3;
+  
+  // Find user's country from the closest place
+  const closestPlace = filteredPlaces.find(p => p.distance !== undefined && p.distance < 50);
+  const userCountry = closestPlace?.country_code || closestPlace?.countryCode || null;
+  
+  // Only apply limit if user is NOT in one of the small countries
+  if (!SMALL_COUNTRIES.includes(userCountry)) {
+    const smallCountryCount = {};
+    filteredPlaces = filteredPlaces.filter(place => {
+      const placeCountry = place.country_code || place.countryCode || '';
+      
+      // Not a small country? Keep it
+      if (!SMALL_COUNTRIES.includes(placeCountry)) return true;
+      
+      // Small country - check limit
+      smallCountryCount[placeCountry] = (smallCountryCount[placeCountry] || 0) + 1;
+      return smallCountryCount[placeCountry] <= MAX_PER_SMALL_COUNTRY;
+    });
+    
+    const limitedCount = Object.values(smallCountryCount).reduce((sum, c) => sum + Math.min(c, MAX_PER_SMALL_COUNTRY), 0);
+    console.log(`🏝️ Limited small countries (${SMALL_COUNTRIES.join(', ')}) to max ${MAX_PER_SMALL_COUNTRY} each: ${limitedCount} markers`);
+  }
 
   // HÖHERE LIMITS - mehr Orte auf der Karte!
   let MAX_PLACES_ON_MAP;
