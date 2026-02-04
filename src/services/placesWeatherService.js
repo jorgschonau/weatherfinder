@@ -70,7 +70,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
       latMin = box.latMin; latMax = box.latMax; lonMin = box.lonMin; lonMax = box.lonMax;
     }
 
-    // Query 1: Get places
+    // Query 1: Get places - SORTED by attractiveness to ensure best places are included
     let placesQuery = supabase
       .from('places')
       .select('id, name, latitude, longitude, country_code, place_type, population, attractiveness_score, clustering_radius_m')
@@ -82,7 +82,10 @@ export const getPlacesWithWeather = async (filters = {}) => {
         .gte('longitude', lonMin).lte('longitude', lonMax);
     }
     
-    const { data: places, error: placesError } = await placesQuery.limit(5000);
+    // WICHTIG: Sortieren BEVOR limit, sonst werden gute Orte zufällig abgeschnitten!
+    const { data: places, error: placesError } = await placesQuery
+      .order('attractiveness_score', { ascending: false, nullsFirst: false })
+      .limit(5000);
     
     if (placesError) {
       console.error('❌ Places query failed:', placesError);
