@@ -47,7 +47,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
       
       // If destination already has all forecast data (mock data or complete data), use it directly
       if (destination.forecast) {
-        // Ensure forecast has the expected structure with high/low
+        // Ensure forecast has the expected structure with high/low (5 days)
         const normalizedForecast = {
           today: destination.forecast.today ? {
             ...destination.forecast.today,
@@ -64,11 +64,20 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             high: (destination.forecast.day3?.high || destination.forecast.day2?.high) ?? Math.round((destination.forecast.day3?.temp || destination.forecast.day2?.temp || 0)),
             low: (destination.forecast.day3?.low || destination.forecast.day2?.low) ?? Math.round((destination.forecast.day3?.temp || destination.forecast.day2?.temp || 0) - 3),
           } : null,
+          day4: destination.forecast.day4 ? {
+            ...destination.forecast.day4,
+            high: destination.forecast.day4.high ?? Math.round(destination.forecast.day4.temp || 0),
+            low: destination.forecast.day4.low ?? Math.round((destination.forecast.day4.temp || 0) - 3),
+          } : null,
+          day5: destination.forecast.day5 ? {
+            ...destination.forecast.day5,
+            high: destination.forecast.day5.high ?? Math.round(destination.forecast.day5.temp || 0),
+            low: destination.forecast.day5.low ?? Math.round((destination.forecast.day5.temp || 0) - 3),
+          } : null,
         };
         
         setForecast({
           ...destination,
-          // Ensure all required fields are present
           description: destination.description || destination.weatherDescription || `${destination.condition} conditions`,
           countryCode: destination.countryCode || destination.country_code,
           country_code: destination.country_code || destination.countryCode,
@@ -88,7 +97,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             throw new Error(fetchError || 'Failed to fetch place detail');
           }
           
-          // Convert Supabase forecast data to expected format
+          // Convert Supabase forecast data to expected format (5 days)
           const convertedForecast = {
             ...place,
             name: destination.name, // Keep original name
@@ -110,23 +119,25 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                 temp: Math.round((forecastData[1].tempMin + forecastData[1].tempMax) / 2),
                 high: forecastData[1].tempMax,
                 low: forecastData[1].tempMin,
-              } : {
-                condition: place.condition,
-                temp: place.temperature + 1,
-                high: place.temperature + 4,
-                low: place.temperature - 2,
-              },
+              } : null,
               day3: forecastData[2] ? {
                 condition: forecastData[2].condition,
                 temp: Math.round((forecastData[2].tempMin + forecastData[2].tempMax) / 2),
                 high: forecastData[2].tempMax,
                 low: forecastData[2].tempMin,
-              } : {
-                condition: place.condition,
-                temp: place.temperature,
-                high: place.temperature + 3,
-                low: place.temperature - 3,
-              },
+              } : null,
+              day4: forecastData[3] ? {
+                condition: forecastData[3].condition,
+                temp: Math.round((forecastData[3].tempMin + forecastData[3].tempMax) / 2),
+                high: forecastData[3].tempMax,
+                low: forecastData[3].tempMin,
+              } : null,
+              day5: forecastData[4] ? {
+                condition: forecastData[4].condition,
+                temp: Math.round((forecastData[4].tempMin + forecastData[4].tempMax) / 2),
+                high: forecastData[4].tempMax,
+                low: forecastData[4].tempMin,
+              } : null,
             },
           };
           
@@ -154,7 +165,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
         }
       }
       
-      // Fallback: Use destination data with generated forecast
+      // Fallback: Use destination data with generated forecast (5 days)
       setForecast({
         ...destination,
         description: destination.description || destination.weatherDescription || `${destination.condition} conditions`,
@@ -164,6 +175,8 @@ const DestinationDetailScreen = ({ route, navigation }) => {
           today: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
           tomorrow: { condition: destination.condition, temp: destination.temperature + 1, high: destination.temperature + 4, low: destination.temperature - 2 },
           day3: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
+          day4: { condition: destination.condition, temp: destination.temperature - 1, high: destination.temperature + 2, low: destination.temperature - 4 },
+          day5: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
         }
       });
     } catch (err) {
@@ -364,6 +377,52 @@ const DestinationDetailScreen = ({ route, navigation }) => {
     return '6-8';
   };
 
+  /**
+   * Find the best day from the forecast
+   * Scoring: sunny condition + highest temperature
+   */
+  const findBestDay = () => {
+    if (!forecast?.forecast) return null;
+    
+    const conditionScore = (condition) => {
+      if (!condition) return 0;
+      const c = condition.toLowerCase();
+      if (c === 'sunny' || c.includes('clear')) return 100;
+      if (c === 'cloudy' || c.includes('partly')) return 60;
+      if (c.includes('overcast')) return 40;
+      if (c.includes('wind')) return 30;
+      if (c.includes('rain') || c.includes('snow')) return 10;
+      return 50;
+    };
+    
+    const days = [
+      { key: 'today', label: t('destination.today'), data: forecast.forecast.today },
+      { key: 'tomorrow', label: t('destination.tomorrow'), data: forecast.forecast.tomorrow },
+      { key: 'day3', label: t('destination.day3'), data: forecast.forecast.day3 },
+      { key: 'day4', label: t('destination.day4', { defaultValue: 'Tag 4' }), data: forecast.forecast.day4 },
+      { key: 'day5', label: t('destination.day5', { defaultValue: 'Tag 5' }), data: forecast.forecast.day5 },
+    ].filter(d => d.data);
+    
+    if (days.length === 0) return null;
+    
+    // Calculate score for each day: condition (60%) + temperature (40%)
+    const scored = days.map(day => {
+      const temp = day.data.high ?? day.data.temp ?? 0;
+      const cond = conditionScore(day.data.condition);
+      // Normalize temp: 0°C = 0, 30°C = 100
+      const tempNormalized = Math.max(0, Math.min(100, (temp / 30) * 100));
+      const score = cond * 0.6 + tempNormalized * 0.4;
+      return { ...day, score, temp, condition: day.data.condition };
+    });
+    
+    // Find highest scoring day
+    const best = scored.reduce((a, b) => a.score > b.score ? a : b);
+    
+    return best;
+  };
+
+  const bestDay = findBestDay();
+
   // Check if we need dark text (for cold/light backgrounds like snow or sunny+freezing)
   const needsDarkText = () => {
     const condition = forecast.condition?.toLowerCase() || '';
@@ -407,6 +466,10 @@ const DestinationDetailScreen = ({ route, navigation }) => {
         
         {/* Untere Zeile: Description */}
         <Text style={[styles.headerSubtitle, { color: subtitleColor }]}>{translateCondition(forecast.description)}</Text>
+        {/* TEMP DEBUG: Show attractiveness score */}
+        <Text style={[styles.headerSubtitle, { color: subtitleColor, marginTop: 4, fontSize: 12, opacity: 0.7 }]}>
+          Score: {forecast.attractivenessScore || forecast.attractiveness_score || destination.attractivenessScore || destination.attractiveness_score || '?'}
+        </Text>
       </View>
 
       <View style={styles.content}>
@@ -485,7 +548,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                   return `${sunnyStreakData.streakLength} Tage ☀️ | Ø ${sunnyStreakData.avgTemp}°C`;
                 }
                 if (isWeatherMiracle && miracleData) {
-                  return `+${miracleData.tempGain}°C bald ☀️`;
+                  return `+${Math.round(miracleData.tempGain)}°C bald ☀️`;
                 }
                 if (isHeatwave && heatwaveData) {
                   return `${heatwaveData.days} Tage 🔥 | Ø ${heatwaveData.avgTemp}°C`;
@@ -655,7 +718,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       {isWeatherMiracle && miracleData && (
                         <View style={styles.badgeStats}>
                           <Text style={[styles.badgeStat, { color: '#D65A2E' }]}>
-                            🌡️ Heute: {miracleData.todayTemp}°C → Bald: {miracleData.futureTempMax}°C (+{miracleData.tempGain}°C)
+                            🌡️ Heute: {Math.round(miracleData.todayTemp)}°C → Bald: {Math.round(miracleData.futureTempMax)}°C (+{Math.round(miracleData.tempGain)}°C)
                           </Text>
                           <Text style={[styles.badgeStat, { color: theme.primary }]}>
                             ☀️ {translateCondition(miracleData.todayCondition)} → {miracleData.futureCondition}
@@ -758,6 +821,20 @@ const DestinationDetailScreen = ({ route, navigation }) => {
         }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('destination.forecast')}</Text>
           
+          {/* Best Day Highlight */}
+          {bestDay && (
+            <View style={[styles.bestDayContainer, { backgroundColor: '#FFF8E1', borderColor: '#FFD54F' }]}>
+              <Text style={styles.bestDayIcon}>⭐</Text>
+              <View style={styles.bestDayContent}>
+                <Text style={styles.bestDayLabel}>Bester Tag</Text>
+                <Text style={styles.bestDayValue}>
+                  {bestDay.label} ({Math.round(bestDay.temp)}°C, {translateCondition(bestDay.condition)})
+                </Text>
+              </View>
+              <Text style={styles.bestDayWeatherIcon}>{getWeatherIcon(bestDay.condition)}</Text>
+            </View>
+          )}
+          
           <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
             <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.today')}</Text>
             <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.today?.condition)}</Text>
@@ -779,6 +856,22 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.day3?.condition)}</Text>
             <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
               {forecast.forecast?.day3?.high ?? '?'}° / {forecast.forecast?.day3?.low ?? '?'}°
+            </Text>
+          </View>
+
+          <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
+            <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.day4', { defaultValue: 'Tag 4' })}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.day4?.condition)}</Text>
+            <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
+              {forecast.forecast?.day4?.high ?? '?'}° / {forecast.forecast?.day4?.low ?? '?'}°
+            </Text>
+          </View>
+
+          <View style={[styles.forecastItem, { borderBottomColor: 'transparent' }]}>
+            <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.day5', { defaultValue: 'Tag 5' })}</Text>
+            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.day5?.condition)}</Text>
+            <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
+              {forecast.forecast?.day5?.high ?? '?'}° / {forecast.forecast?.day5?.low ?? '?'}°
             </Text>
           </View>
         </View>
@@ -935,7 +1028,7 @@ const styles = StyleSheet.create({
   },
   forecastSection: {
     borderRadius: 16,
-    padding: 20,
+    padding: 15,
     marginBottom: 20,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.22,
@@ -1001,9 +1094,9 @@ const styles = StyleSheet.create({
     top: 20,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: 'bold',
-    marginBottom: 15,
+    marginBottom: 10,
   },
   driveButtonTop: {
     paddingVertical: 18,
@@ -1024,11 +1117,41 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 0.5,
   },
+  bestDayContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 2,
+    marginBottom: 12,
+  },
+  bestDayIcon: {
+    fontSize: 22,
+    marginRight: 10,
+  },
+  bestDayContent: {
+    flex: 1,
+  },
+  bestDayLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#B8860B',
+    marginBottom: 1,
+  },
+  bestDayValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#5D4037',
+  },
+  bestDayWeatherIcon: {
+    fontSize: 26,
+    marginLeft: 6,
+  },
   forecastItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
   },
   forecastDay: {
@@ -1037,15 +1160,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   forecastIcon: {
-    fontSize: 40,
-    width: 60,
+    fontSize: 30,
+    width: 45,
     textAlign: 'center',
-    marginHorizontal: 16,
+    marginHorizontal: 10,
   },
   forecastTemp: {
     fontSize: 16,
     fontWeight: '500',
-    minWidth: 80,
+    minWidth: 75,
   },
   actionsContainer: {
     gap: 12,

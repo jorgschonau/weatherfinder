@@ -172,31 +172,18 @@ const MapScreen = ({ navigation }) => {
     };
   }, [location, radius, selectedCondition, centerPoint, centerPointWeather]);
 
-  // Update visible markers when zoom, bounds, or destinations change
+  // Update visible markers ONLY when zoom or destinations change (NOT on pan/bounds)
   useEffect(() => {
-    if (destinations.length > 0 && currentBounds) {
-      // Debounce bounds changes for performance
-      if (boundsDebounceTimer.current) {
-        clearTimeout(boundsDebounceTimer.current);
-      }
+    if (destinations.length > 0) {
+      const visible = getVisibleMarkers(destinations, currentZoom, currentBounds);
+      setVisibleMarkers(visible);
       
-      boundsDebounceTimer.current = setTimeout(() => {
-        const visible = getVisibleMarkers(destinations, currentZoom, currentBounds);
-        setVisibleMarkers(visible);
-        
-        const specialCount = visible.filter(v => v.isCurrentLocation || v.isCenterPoint).length;
-        const badgeCount = visible.filter(v => v.badges && v.badges.length > 0 && !v.isCurrentLocation && !v.isCenterPoint).length;
-        const regularCount = visible.length - specialCount - badgeCount;
-        console.log(`🔍 Zoom ${currentZoom}: ${visible.length} markers (${specialCount} special + ${badgeCount} badges + ${regularCount} regular) of ${destinations.length}`);
-      }, 300);
+      const specialCount = visible.filter(v => v.isCurrentLocation || v.isCenterPoint).length;
+      const badgeCount = visible.filter(v => getMapBadges(v.badges).length > 0 && !v.isCurrentLocation && !v.isCenterPoint).length;
+      const regularCount = visible.length - specialCount - badgeCount;
+      console.log(`🔍 Zoom ${currentZoom}: ${visible.length} markers (${specialCount} special + ${badgeCount} map badges + ${regularCount} regular) of ${destinations.length}`);
     }
-    
-    return () => {
-      if (boundsDebounceTimer.current) {
-        clearTimeout(boundsDebounceTimer.current);
-      }
-    };
-  }, [destinations, currentZoom, currentBounds]);
+  }, [destinations, currentZoom]);
 
   const loadDestinations = async () => {
     if (!location) return;
@@ -249,6 +236,14 @@ const MapScreen = ({ navigation }) => {
       // Badges are now calculated in weatherUsecases.js - no need to apply here!
       
       setDestinations(allDestinations);
+      
+      // DEBUG: Log all loaded places
+      console.log(`📋 ALL ${allDestinations.length} loaded places:`);
+      allDestinations.forEach((d, i) => {
+        console.log(`  ${i}: ${d.name} (${d.lat?.toFixed(2)}, ${d.lon?.toFixed(2)}) ${d.temperature}°C ${d.condition || ''} ${d.badges?.length ? '🏆' + d.badges.join(',') : ''}`);
+      });
+      const hasHamburg = allDestinations.some(d => d.name?.toLowerCase().includes('hamburg'));
+      console.log(`🔍 Hamburg dabei? ${hasHamburg ? '✅ JA' : '❌ NEIN'}`);
       
       // Cache destinations
       try {
@@ -499,11 +494,22 @@ const MapScreen = ({ navigation }) => {
   };
 
   /**
+   * Get badges that should show on map markers (excludes detailOnly badges)
+   */
+  const getMapBadges = (badges) => {
+    if (!badges || badges.length === 0) return [];
+    return badges.filter(badge => !BadgeMetadata[badge]?.detailOnly);
+  };
+
+  /**
    * Calculate display score: Badges first, then TEMPERATURE (warmest wins!)
+   * Note: detailOnly badges (WEATHER_MIRACLE, RAINY_DAYS, WEATHER_CURSE) don't boost priority
    */
   const getDisplayScore = (place) => {
-    // Orte mit Badges = immer max Score (100)
-    if (place.badges && place.badges.length > 0) {
+    // Orte mit MAP-relevanten Badges = immer max Score (100)
+    // detailOnly badges zählen nicht für die Kartenpriorisierung!
+    const mapBadges = getMapBadges(place.badges);
+    if (mapBadges.length > 0) {
       return 100;
     }
     
@@ -530,15 +536,34 @@ const MapScreen = ({ navigation }) => {
   
   // ========== BALANCED MARKER FILTER ==========
   // Shows mix of badge places AND normal good places
-  const MAX_MARKERS = 50;        // Total marker limit
-  const MAX_BADGE_MARKERS = 30;  // Cap for badge places to ensure normal places get shown
   
+  /**
+   * Dynamic max markers based on zoom and radius
+   * Standard zoom: 3-4, reinzoomen: 5-6
+   */
+  const getMaxMarkers = (zoom, radiusKm) => {
+    let base = Math.floor(radiusKm / 20);
+    
+    let zoomFactor;
+    if (zoom <= 3) zoomFactor = 0.6;      // Standard rausgezoomt
+    else if (zoom <= 4) zoomFactor = 1.0;  // Standard normal
+    else if (zoom <= 5) zoomFactor = 1.5;  // Etwas reingezoomt
+    else zoomFactor = 2.0;                 // 6+
+    
+    const total = Math.min(Math.max(base * zoomFactor, 25), 150);
+    return Math.round(total);
+  };
+  
+  /**
+   * Minimum distance between markers (in km) based on zoom
+   * Standard zoom: 3-4, reinzoomen: 5-6
+   */
   const getMinDistanceForZoom = (zoom) => {
-    if (zoom < 5) return 100;  // Very far out
-    if (zoom < 7) return 70;   
-    if (zoom < 9) return 50;   
-    if (zoom < 11) return 30;  
-    return 20;                 // Zoomed in
+    if (zoom <= 4) return 80;    // Weit rausgezoomt (Europa)
+    if (zoom <= 5) return 60;    // Länder-Ansicht
+    if (zoom <= 6) return 45;    // Regional
+    if (zoom <= 7) return 30;    // Städte-Ansicht
+    return 20;                   // 8+ (nah dran)
   };
   
   /**
@@ -576,84 +601,106 @@ const MapScreen = ({ navigation }) => {
   };
   
   const getVisibleMarkers = (allPlaces, zoom, bounds) => {
-    // STEP 1: Filter valid places
     const candidates = allPlaces.filter(p => 
       p.temperature !== null && p.temperature !== undefined
     );
-    
     if (candidates.length === 0) return [];
     
-    // Get user location for distance sorting
     const userLat = location?.latitude;
     const userLon = location?.longitude;
+    const maxMarkers = getMaxMarkers(zoom, radius);
+    const minDistance = getMinDistanceForZoom(zoom);
     
-    // STEP 2: Separate into two groups - with badges and without badges
+    // Grid size based on zoom
+    const gridSize = minDistance / 111;
+    
+    console.log('🎯 Filter Config:', { maxMarkers, minDistance: minDistance + 'km', zoom, radius: radius + 'km', candidates: candidates.length });
+    
+    // Separate special markers (always shown)
     const specialMarkers = candidates.filter(p => p.isCurrentLocation || p.isCenterPoint);
-    const withBadges = candidates.filter(p => 
-      !p.isCurrentLocation && !p.isCenterPoint && p.badges && p.badges.length > 0
-    );
-    const withoutBadges = candidates.filter(p => 
-      !p.isCurrentLocation && !p.isCenterPoint && (!p.badges || p.badges.length === 0)
-    );
     
-    console.log(`🎯 ${candidates.length} candidates: ${withBadges.length} with badges, ${withoutBadges.length} without badges`);
+    // Sort rest: badges first, then by quality
+    const rest = candidates.filter(p => !p.isCurrentLocation && !p.isCenterPoint);
+    const sorted = [...rest].sort((a, b) => {
+      const aBadges = getMapBadges(a.badges).length;
+      const bBadges = getMapBadges(b.badges).length;
+      if (aBadges !== bBadges) return bBadges - aBadges;
+      
+      const aScore = a.attractivenessScore || a.attractiveness_score || 50;
+      const bScore = b.attractivenessScore || b.attractiveness_score || 50;
+      if (Math.abs(aScore - bScore) > 5) return bScore - aScore;
+      
+      const aTemp = a.temperature || 0;
+      const bTemp = b.temperature || 0;
+      if (Math.abs(aTemp - bTemp) > 2) return bTemp - aTemp;
+      
+      if (userLat && userLon) {
+        const aDist = getDistanceKm(userLat, userLon, a.lat || a.latitude, a.lon || a.longitude);
+        const bDist = getDistanceKm(userLat, userLon, b.lat || b.latitude, b.lon || b.longitude);
+        return aDist - bDist;
+      }
+      return 0;
+    });
     
-    // STEP 3: Sort each group by quality
-    const sortedWithBadges = sortByQuality(withBadges, userLat, userLon);
-    const sortedWithoutBadges = sortByQuality(withoutBadges, userLat, userLon);
+    // Adaptive strategy: Phase 1 = best places, Phase 2 = grid-limited diversity
+    const PHASE_1_RATIO = 0.4;
+    const phase1Limit = Math.floor(maxMarkers * PHASE_1_RATIO);
+    const GRID_LIMIT = 3;
     
-    // STEP 4: Create balanced selection
-    // - First: all special markers
-    // - Then: up to MAX_BADGE_MARKERS badge places
-    // - Finally: fill remaining slots with normal places
-    const badgePlacesToShow = sortedWithBadges.slice(0, MAX_BADGE_MARKERS);
-    const remainingSlots = MAX_MARKERS - specialMarkers.length - badgePlacesToShow.length;
-    const normalPlacesToShow = sortedWithoutBadges.slice(0, Math.max(0, remainingSlots));
+    const gridsUsed = new Map();
+    const getGridKey = (lat, lon) => {
+      const gLat = Math.floor(lat / gridSize) * gridSize;
+      const gLon = Math.floor(lon / gridSize) * gridSize;
+      return `${gLat.toFixed(1)},${gLon.toFixed(1)}`;
+    };
     
-    // Combine: special first, then interleave badges and normal for better distribution
-    const combinedCandidates = [
-      ...specialMarkers,
-      ...badgePlacesToShow,
-      ...normalPlacesToShow
-    ];
+    const result = [...specialMarkers];
+    let skipped = 0;
+    let gridLimited = 0;
     
-    // Re-sort combined list by quality (but badges still tend to rank higher due to attractiveness)
-    const sortedCombined = sortByQuality(combinedCandidates, userLat, userLon);
-    
-    // STEP 5: Apply zoom-dependent distance filtering
-    const minDist = getMinDistanceForZoom(zoom);
-    console.log(`📏 Zoom ${zoom.toFixed(1)} → ${minDist}km min distance`);
-    
-    // STEP 6: Greedy selection with distance check
-    const result = [];
-    
-    for (const place of sortedCombined) {
-      if (result.length >= MAX_MARKERS) break;
+    for (const place of sorted) {
+      if (result.length >= maxMarkers) break;
       
       const lat = place.lat || place.latitude;
       const lon = place.lon || place.longitude;
+      const gridKey = getGridKey(lat, lon);
+      const gridCount = gridsUsed.get(gridKey) || 0;
+      const hasBadges = getMapBadges(place.badges).length > 0;
       
-      // Special markers always included
-      if (place.isCurrentLocation || place.isCenterPoint) {
-        result.push(place);
+      // PHASE 1: First 40% - take best places, no grid limit (badges always allowed)
+      const inPhase1 = result.length < phase1Limit;
+      
+      // PHASE 2: Last 60% - enforce grid limit (max 3 per grid)
+      if (!inPhase1 && !hasBadges && gridCount >= GRID_LIMIT) {
+        console.log('🚫 Grid full (Phase 2):', gridKey, place.name);
+        gridLimited++;
         continue;
       }
       
-      // Check distance to ALL existing markers
-      const tooClose = result.some(existing => {
-        const exLat = existing.lat || existing.latitude;
-        const exLon = existing.lon || existing.longitude;
-        return getDistanceKm(lat, lon, exLat, exLon) < minDist;
-      });
+      // Distance check (same as before)
+      let tooClose = false;
+      for (const existing of result) {
+        const dist = getDistanceKm(lat, lon, existing.lat || existing.latitude, existing.lon || existing.longitude);
+        if (dist < minDistance) {
+          tooClose = true;
+          break;
+        }
+      }
       
       if (!tooClose) {
         result.push(place);
+        gridsUsed.set(gridKey, gridCount + 1);
+        const phase = inPhase1 ? 'Phase1' : 'Phase2';
+        console.log(`✅ ${phase}: ${place.name} → ${gridKey} (${gridCount + 1}/${inPhase1 ? '∞' : GRID_LIMIT})`);
+      } else {
+        skipped++;
       }
     }
     
-    const badgeCount = result.filter(p => p.badges?.length > 0).length;
-    const normalCount = result.filter(p => !p.badges || p.badges.length === 0).length;
-    console.log(`✅ ${result.length} markers: ${badgeCount} with badges, ${normalCount} normal (${minDist}km spacing)`);
+    const finalBadgeCount = result.filter(p => getMapBadges(p.badges).length > 0).length;
+    const normalCount = result.length - finalBadgeCount - specialMarkers.length;
+    const phase = result.length <= phase1Limit ? 'Phase1 only' : 'Phase1+2';
+    console.log(`📊 Final: ${result.length} markers (${finalBadgeCount} badges + ${normalCount} normal), ${skipped} too close, ${gridLimited} grid limited, ${gridsUsed.size} grids [${phase}]`);
     return result;
   };
 
@@ -839,7 +886,11 @@ const MapScreen = ({ navigation }) => {
     const newZoom = Math.max(1, Math.min(20, zoom));
     
     if (newZoom !== currentZoom) {
-      console.log(`📏 Zoom changed: ${currentZoom} → ${newZoom}`);
+      const oldMax = getMaxMarkers(currentZoom, radius);
+      const newMax = getMaxMarkers(newZoom, radius);
+      const oldDist = getMinDistanceForZoom(currentZoom);
+      const newDist = getMinDistanceForZoom(newZoom);
+      console.log(`📏 ZOOM CHANGED: ${currentZoom} → ${newZoom} | Max: ${oldMax} → ${newMax} | MinDist: ${oldDist}km → ${newDist}km`);
       setCurrentZoom(newZoom);
     }
     
@@ -955,23 +1006,42 @@ const MapScreen = ({ navigation }) => {
           />
         )}
 
-        {/* Custom Center Point Marker - BIG BLUE CIRCLE */}
+        {/* Custom Center Point Marker - Shows weather when available */}
         {centerPoint && (
           <Marker
             coordinate={{ latitude: centerPoint.latitude, longitude: centerPoint.longitude }}
             anchor={{ x: 0.5, y: 0.5 }}
+            onPress={() => centerPointWeather && handleMarkerPress(centerPointWeather)}
           >
-            <View style={styles.centerPointCircleMarker}>
-              <View style={styles.centerPointCircleInner}>
-                <Text style={styles.centerPointIcon}>⊕</Text>
+            {centerPointWeather ? (
+              <View style={[
+                styles.markerContainer,
+                { backgroundColor: getWeatherColor(centerPointWeather.condition, centerPointWeather.temperature) },
+                styles.centerPointMarker
+              ]}>
+                <Text style={styles.markerWeatherIcon}>{getWeatherIcon(centerPointWeather.condition)}</Text>
+                <Text style={styles.markerTemp}>
+                  {centerPointWeather.temperature !== null && centerPointWeather.temperature !== undefined 
+                    ? Math.round(centerPointWeather.temperature) 
+                    : '?'}°
+                </Text>
+                <View style={styles.centerPointBadgeIndicator}>
+                  <Text style={styles.centerPointBadgeText}>⊕</Text>
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={styles.centerPointCircleMarker}>
+                <View style={styles.centerPointCircleInner}>
+                  <Text style={styles.centerPointIcon}>⊕</Text>
+                </View>
+              </View>
+            )}
           </Marker>
         )}
 
         {/* Greedy-filtered markers based on zoom + score */}
         {visibleMarkers
-          .filter(dest => !showOnlyBadges || (dest.badges && dest.badges.length > 0)) // Filter by badges if toggle active
+          .filter(dest => !showOnlyBadges || getMapBadges(dest.badges).length > 0) // Filter by MAP badges if toggle active
           .map((dest, index) => (
           <Marker
             key={`${dest.lat}-${dest.lon}-${index}`}
@@ -1002,9 +1072,10 @@ const MapScreen = ({ navigation }) => {
               */}
               
               {/* Badge overlays (stacked vertically on right side) with animations */}
-              {dest.badges && dest.badges.length > 0 && (
+              {/* Note: detailOnly badges (WEATHER_MIRACLE, RAINY_DAYS, WEATHER_CURSE) are hidden on map */}
+              {getMapBadges(dest.badges).length > 0 && (
                 <View style={styles.badgeOverlayContainer}>
-                  {dest.badges
+                  {getMapBadges(dest.badges)
                     .sort((a, b) => (BadgeMetadata[a]?.priority || 99) - (BadgeMetadata[b]?.priority || 99)) // Sort by priority
                     .slice(0, 6) // Max 6 badges per marker
                     .map((badge, badgeIndex) => (
@@ -1037,7 +1108,7 @@ const MapScreen = ({ navigation }) => {
       )}
 
       {/* Empty state when trophy filter is active but no places */}
-      {showOnlyBadges && !loadingDestinations && visibleMarkers.filter(dest => dest.badges && dest.badges.length > 0).length === 0 && (
+      {showOnlyBadges && !loadingDestinations && visibleMarkers.filter(dest => getMapBadges(dest.badges).length > 0).length === 0 && (
         <View style={[styles.emptyStateOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]}>
           <View style={[styles.emptyStateBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text style={styles.emptyStateIcon}>🏆</Text>
@@ -1256,6 +1327,11 @@ const MapScreen = ({ navigation }) => {
         </View>
       </View>
 
+      {/* Zoom Level Indicator */}
+      <View style={[styles.zoomIndicator, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <Text style={[styles.zoomIndicatorText, { color: theme.textSecondary }]}>Z{currentZoom}</Text>
+      </View>
+
       {/* Bottom Left Buttons Container */}
       <View style={styles.bottomLeftButtons}>
         {/* Reverse Mode Button (Warm/Cold) */}
@@ -1417,6 +1493,21 @@ const styles = StyleSheet.create({
   },
   centerPointBadge: {
     backgroundColor: '#FF5722',
+  },
+  centerPointBadgeIndicator: {
+    position: 'absolute',
+    bottom: -10,
+    backgroundColor: '#FF5722',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  centerPointBadgeText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   centerPointCircleMarker: {
     width: 60,
@@ -1601,6 +1692,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  zoomIndicator: {
+    position: 'absolute',
+    bottom: 120,
+    left: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    opacity: 0.7,
+  },
+  zoomIndicatorText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   bottomLeftButtons: {
     position: 'absolute',

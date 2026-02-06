@@ -55,6 +55,7 @@ export const fetchWeatherForPlace = async (place) => {
         'wind_speed_10m_max',
         'wind_gusts_10m_max',
         'wind_direction_10m_dominant',
+        'relative_humidity_2m_mean',
       ].join(','),
       
       forecast_days: 16,
@@ -169,6 +170,9 @@ const saveForecastData = async (placeId, forecastData) => {
     rain_probability: forecastData.precipitation_probability_max[i] / 100, // Convert % to 0-1
     rain_volume: forecastData.rain_sum[i],
     snow_volume: forecastData.snowfall_sum[i],
+    
+    // Humidity
+    humidity: forecastData.relative_humidity_2m_mean?.[i] ?? null,
     
     // Sunrise/Sunset (if available)
     sunrise: forecastData.sunrise?.[i] ? new Date(forecastData.sunrise[i]).toISOString() : null,

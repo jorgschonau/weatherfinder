@@ -70,7 +70,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
       latMin = box.latMin; latMax = box.latMax; lonMin = box.lonMin; lonMax = box.lonMax;
     }
 
-    // Query 1: Get places - SORTED by attractiveness to ensure best places are included
+    // Query 1: Get places
     let placesQuery = supabase
       .from('places')
       .select('id, name, latitude, longitude, country_code, place_type, population, attractiveness_score, clustering_radius_m')
@@ -82,10 +82,10 @@ export const getPlacesWithWeather = async (filters = {}) => {
         .gte('longitude', lonMin).lte('longitude', lonMax);
     }
     
-    // WICHTIG: Sortieren BEVOR limit, sonst werden gute Orte zufällig abgeschnitten!
+    // CHANGED: 5000 → 1000
     const { data: places, error: placesError } = await placesQuery
-      .order('attractiveness_score', { ascending: false, nullsFirst: false })
-      .limit(5000);
+      .limit(1000)
+      .order('attractiveness_score', { ascending: false });
     
     if (placesError) {
       console.error('❌ Places query failed:', placesError);
@@ -98,17 +98,14 @@ export const getPlacesWithWeather = async (filters = {}) => {
       return { places: [], error: null };
     }
     
-    // Query 2: Get weather for TODAY ONLY for our places
+    // Query 2: Get weather for places (keep 3 days for badges)
     const placeIds = places.map(p => p.id);
-    // Hole Wetter für targetDate ODER nächste 3 Tage als Fallback
     const fallbackDate = new Date(new Date(targetDate).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     console.log(`🌤️ Fetching weather for ${placeIds.length} places (${targetDate} to ${fallbackDate})...`);
     
-    // Fetch in chunks of 200 to avoid URL length issues
     let allWeather = [];
-    const CHUNK_SIZE = 200;
+    const CHUNK_SIZE = 500;  // CHANGED: 200 → 500
     
-    // Filter out stale data (older than 7 days) to ensure fresh weather info
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     
     for (let i = 0; i < placeIds.length; i += CHUNK_SIZE) {
@@ -118,8 +115,8 @@ export const getPlacesWithWeather = async (filters = {}) => {
         .select('place_id, forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, sunshine_duration, fetched_at, humidity')
         .in('place_id', chunk)
         .gte('forecast_date', targetDate)
-        .lte('forecast_date', fallbackDate)
-        .gte('fetched_at', sevenDaysAgo)  // Only data fetched in last 7 days
+        .lte('forecast_date', fallbackDate)  // Keep 3 days for badges
+        .gte('fetched_at', sevenDaysAgo)
         .order('forecast_date', { ascending: true });
       
       if (!chunkError && chunkWeather) {
@@ -354,7 +351,7 @@ export const getPlaceDetail = async (placeId, locale = 'en') => {
     const today = new Date().toISOString().split('T')[0];
     const { data: weatherData } = await supabase
       .from('weather_forecast')
-      .select('forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, precipitation_sum, precipitation_probability, sunrise, sunset, rain_volume, snow_volume')
+      .select('forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, precipitation_sum, precipitation_probability, sunrise, sunset, rain_volume, snow_volume, humidity')
       .eq('place_id', placeId)
       .gte('forecast_date', today)
       .order('forecast_date', { ascending: true })
@@ -378,6 +375,7 @@ export const getPlaceDetail = async (placeId, locale = 'en') => {
       weather_description: weather.weather_description,
       weather_icon: weather.weather_icon,
       wind_speed: weather.wind_speed,
+      humidity: weather.humidity, // Luftfeuchtigkeit!
       rain_1h: weather.rain_volume,
       snow_1h: weather.snow_volume,
     };

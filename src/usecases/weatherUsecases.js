@@ -29,6 +29,8 @@ const getDistanceKm = (lat1, lon1, lat2, lon2) => {
 const applyBadgesToDestinations = (destinations, originLocation, originLat, originLon) => {
   if (!destinations || !originLocation) return;
   
+  console.log(`🏆 applyBadgesToDestinations: ${destinations.length} destinations, origin: ${originLocation.name} at ${originLocation.temperature}°C`);
+  
   destinations.forEach(dest => {
     // Skip current location (it shouldn't get badges)
     if (dest.isCurrentLocation) {
@@ -52,7 +54,17 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
   // Award this FIRST before Worth the Drive
   const budgetCandidates = destinations
     .filter(d => !d.isCurrentLocation && d._worthTheDriveBudgetData?.isEligible)
-    .sort((a, b) => (b._worthTheDriveBudgetData?.efficiency || 0) - (a._worthTheDriveBudgetData?.efficiency || 0));
+    .sort((a, b) => {
+      // Primary: efficiency
+      const effDiff = (b._worthTheDriveBudgetData?.efficiency || 0) - (a._worthTheDriveBudgetData?.efficiency || 0);
+      if (Math.abs(effDiff) > 0.001) return effDiff;
+      // Tiebreaker 1: attractiveness score
+      const aScore = a.attractivenessScore || a.attractiveness_score || 50;
+      const bScore = b.attractivenessScore || b.attractiveness_score || 50;
+      if (aScore !== bScore) return bScore - aScore;
+      // Tiebreaker 2: closer distance wins
+      return (a._worthTheDriveBudgetData?.distance || 9999) - (b._worthTheDriveBudgetData?.distance || 9999);
+    });
   
   // DEBUG: Show top 10 candidates
   console.log(`💰 DEBUG Budget Candidates (top 10 of ${budgetCandidates.length}):`);
@@ -82,6 +94,34 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE') && !d.badges.includes('WORTH_THE_DRIVE_BUDGET'))
     .sort((a, b) => (b._worthTheDriveData?.tempDest || 0) - (a._worthTheDriveData?.tempDest || 0));
   
+  // DEBUG: Show ALL Worth the Drive candidates (not just top 10)
+  console.log(`🚗 DEBUG Worth the Drive Candidates (${worthTheDriveCandidates.length} total):`);
+  worthTheDriveCandidates.slice(0, 15).forEach((c, i) => {
+    const data = c._worthTheDriveData;
+    console.log(`  ${i+1}. ${c.name}: temp=${data?.tempDest}°C, delta=+${data?.tempDelta}°C, value=${data?.value}, dist=${c.distance?.toFixed(0)}km`);
+  });
+  
+  // DEBUG: Check if Heerlen is in the candidates
+  const heerlen = worthTheDriveCandidates.find(c => c.name?.toLowerCase().includes('heerlen'));
+  if (heerlen) {
+    const idx = worthTheDriveCandidates.indexOf(heerlen);
+    console.log(`🔍 HEERLEN found at position ${idx + 1} in Worth the Drive candidates!`);
+  } else {
+    // Check if Heerlen is in ALL destinations
+    const heerlenInAll = destinations.find(d => d.name?.toLowerCase().includes('heerlen'));
+    if (heerlenInAll) {
+      console.log(`🔍 HEERLEN found in destinations but NOT in Worth the Drive candidates!`);
+      console.log(`   Badges: ${heerlenInAll.badges?.join(', ') || 'none'}`);
+      console.log(`   Data: temp=${heerlenInAll.temperature}°C, dist=${heerlenInAll.distance?.toFixed(0)}km`);
+      const wtd = heerlenInAll._worthTheDriveData;
+      if (wtd) {
+        console.log(`   WTD criteria: tempDest=${wtd.tempDest}, tempDelta=${wtd.tempDelta}, value=${wtd.value}, delta=${wtd.delta}, shouldAward=${wtd.shouldAward}`);
+      }
+    } else {
+      console.log(`🔍 HEERLEN NOT FOUND in destinations at all!`);
+    }
+  }
+  
   // Greedy selection: pick top candidates that are at least 20km apart
   const selectedWorthBadges = [];
   for (const candidate of worthTheDriveCandidates) {
@@ -100,6 +140,9 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     
     if (!tooClose) {
       selectedWorthBadges.push(candidate);
+      console.log(`  ✅ Selected: ${candidate.name}`);
+    } else {
+      console.log(`  ❌ Skipped (too close): ${candidate.name}`);
     }
   }
   
@@ -260,7 +303,7 @@ export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCon
   
   // Limit markers from small/distant countries if user is NOT in these countries
   // This prevents Caribbean islands etc. from flooding the map
-  const SMALL_COUNTRIES = ['CU', 'DO', 'JM', 'HT', 'LU', 'MT', 'CY'];
+  const SMALL_COUNTRIES = ['CU', 'DO', 'JM', 'HT', 'LU', 'MT', 'CY', 'TN', 'MA'];
   const MAX_PER_SMALL_COUNTRY = 3;
   
   // Find user's country from the closest place

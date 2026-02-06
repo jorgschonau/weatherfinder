@@ -49,6 +49,7 @@ export const BadgeMetadata = {
     icon: '🌈',
     color: '#E91E63', // Pink (dramatic!)
     priority: 5,
+    detailOnly: true, // Only show on detail card, not on map marker
   },
   [DestinationBadge.SUNNY_STREAK]: {
     icon: '☀️',
@@ -59,16 +60,19 @@ export const BadgeMetadata = {
     icon: '⛄',
     color: '#2196F3', // Blue (winter cold)
     priority: 7,
+    detailOnly: true, // Show on detail card, don't force on map
   },
   [DestinationBadge.RAINY_DAYS]: {
     icon: '🌧️',
     color: '#607D8B', // Gray-blue
     priority: 8,
+    detailOnly: true, // Only show on detail card, not on map marker
   },
   [DestinationBadge.WEATHER_CURSE]: {
     icon: '⛈️',
     color: '#37474F', // Dark gray (storm cloud)
     priority: 9,
+    detailOnly: true, // Only show on detail card, not on map marker
   },
   [DestinationBadge.SPRING_AWAKENING]: {
     icon: '🐇', // Bunny for spring
@@ -226,12 +230,12 @@ export function calculateWorthTheDrive(destination, origin, distanceKm) {
   const tempOrigin = origin.temperature ?? 0;
   const tempDelta = tempDest - tempOrigin;
   
-  // Gating criteria (stricter = only the best get the badge)
-  const MIN_WEATHER_SCORE = 70; // Destination must be GOOD (not just decent)
-  const MIN_DELTA = 10; // Must be SIGNIFICANTLY better than origin
+  // Gating criteria
+  const MIN_WEATHER_SCORE = 60; // Destination must be decent weather
+  const MIN_DELTA = 3; // Weather score must be at least slightly better than origin
   const MIN_TEMP_ABSOLUTE = 4; // Destination must be at least 4°C (not freezing!)
-  const MIN_TEMP_DELTA = 5; // Destination must be MUCH warmer (+5°C minimum)
-  const MIN_VALUE = 2.5; // Must have good value (at least 2.5 pts per hour)
+  const MIN_TEMP_DELTA = 4; // Destination must be warmer (+4°C minimum)
+  const MIN_VALUE = 1.5; // Must have reasonable value per hour
   const MIN_DISTANCE_KM = 30; // Must be at least 30km away (otherwise not "worth the drive")
   
   const shouldAward = (
