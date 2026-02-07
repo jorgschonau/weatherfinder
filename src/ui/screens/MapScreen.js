@@ -193,7 +193,7 @@ const MapScreen = ({ navigation }) => {
       // Use centerPoint if set, otherwise use user location
       const effectiveCenter = centerPoint || location;
       
-      console.log(`🔄 Loading destinations for center: ${effectiveCenter.latitude.toFixed(2)}, ${effectiveCenter.longitude.toFixed(2)}, radius: ${radius}km`);
+      console.log(`🔄 Loading destinations for center: ${effectiveCenter.latitude.toFixed(2)}, ${effectiveCenter.longitude.toFixed(2)}, radius: ${radius}km (Pittsburgh should be at 40.44, -79.99)`);
       
       // Get origin temperature for badge calculation
       const originTemp = centerPointWeather?.temperature || null;
@@ -242,8 +242,8 @@ const MapScreen = ({ navigation }) => {
       allDestinations.forEach((d, i) => {
         console.log(`  ${i}: ${d.name} (${d.lat?.toFixed(2)}, ${d.lon?.toFixed(2)}) ${d.temperature}°C ${d.condition || ''} ${d.badges?.length ? '🏆' + d.badges.join(',') : ''}`);
       });
-      const hasHamburg = allDestinations.some(d => d.name?.toLowerCase().includes('hamburg'));
-      console.log(`🔍 Hamburg dabei? ${hasHamburg ? '✅ JA' : '❌ NEIN'}`);
+      const hasPittsburgh = allDestinations.some(d => d.name?.toLowerCase().includes('pittsburgh'));
+      console.log(`🔍 Pittsburgh in allDestinations? ${hasPittsburgh ? '✅ JA' : '❌ NEIN'} (${allDestinations.length} total)`);
       
       // Cache destinations
       try {
@@ -611,16 +611,26 @@ const MapScreen = ({ navigation }) => {
     const maxMarkers = getMaxMarkers(zoom, radius);
     const minDistance = getMinDistanceForZoom(zoom);
     
-    // Grid size based on zoom
-    const gridSize = minDistance / 111;
+    // Constant grid size for consistent geographic balance (independent of zoom)
+    const GRID_SIZE_KM = 250;
+    const gridSize = GRID_SIZE_KM / 111;
     
     console.log('🎯 Filter Config:', { maxMarkers, minDistance: minDistance + 'km', zoom, radius: radius + 'km', candidates: candidates.length });
     
     // Separate special markers (always shown)
     const specialMarkers = candidates.filter(p => p.isCurrentLocation || p.isCenterPoint);
     
+    // Budget badge places are ALWAYS shown, regardless of zoom/grid/distance
+    const budgetPlaces = candidates.filter(p => 
+      !p.isCurrentLocation && !p.isCenterPoint && 
+      p.badges?.includes('WORTH_THE_DRIVE_BUDGET')
+    );
+    
     // Sort rest: badges first, then by quality
-    const rest = candidates.filter(p => !p.isCurrentLocation && !p.isCenterPoint);
+    const rest = candidates.filter(p => 
+      !p.isCurrentLocation && !p.isCenterPoint && 
+      !p.badges?.includes('WORTH_THE_DRIVE_BUDGET')
+    );
     const sorted = [...rest].sort((a, b) => {
       const aBadges = getMapBadges(a.badges).length;
       const bBadges = getMapBadges(b.badges).length;
@@ -654,12 +664,23 @@ const MapScreen = ({ navigation }) => {
       return `${gLat.toFixed(1)},${gLon.toFixed(1)}`;
     };
     
-    const result = [...specialMarkers];
+    const result = [...specialMarkers, ...budgetPlaces];
+    if (budgetPlaces.length > 0) {
+      console.log(`💰 ${budgetPlaces.length} Budget badge places always shown: ${budgetPlaces.map(p => p.name).join(', ')}`);
+    }
     let skipped = 0;
     let gridLimited = 0;
     
+    // DEBUG: Track specific cities through the filter
+    const DEBUG_CITIES = ['pittsburgh'];
+    
     for (const place of sorted) {
-      if (result.length >= maxMarkers) break;
+      if (result.length >= maxMarkers) {
+        if (DEBUG_CITIES.some(c => place.name?.toLowerCase().includes(c))) {
+          console.log(`🔍 DEBUG: ${place.name} NOT shown - maxMarkers (${maxMarkers}) reached at position ${sorted.indexOf(place)}/${sorted.length}`);
+        }
+        break;
+      }
       
       const lat = place.lat || place.latitude;
       const lon = place.lon || place.longitude;
@@ -672,7 +693,9 @@ const MapScreen = ({ navigation }) => {
       
       // PHASE 2: Last 60% - enforce grid limit (max 3 per grid)
       if (!inPhase1 && !hasBadges && gridCount >= GRID_LIMIT) {
-        console.log('🚫 Grid full (Phase 2):', gridKey, place.name);
+        if (DEBUG_CITIES.some(c => place.name?.toLowerCase().includes(c))) {
+          console.log(`🔍 DEBUG: ${place.name} NOT shown - grid full in Phase 2 (${gridKey}: ${gridCount}/${GRID_LIMIT})`);
+        }
         gridLimited++;
         continue;
       }
@@ -691,10 +714,27 @@ const MapScreen = ({ navigation }) => {
         result.push(place);
         gridsUsed.set(gridKey, gridCount + 1);
         const phase = inPhase1 ? 'Phase1' : 'Phase2';
-        console.log(`✅ ${phase}: ${place.name} → ${gridKey} (${gridCount + 1}/${inPhase1 ? '∞' : GRID_LIMIT})`);
+        if (DEBUG_CITIES.some(c => place.name?.toLowerCase().includes(c))) {
+          const score = place.attractivenessScore || place.attractiveness_score || '?';
+          console.log(`🔍 DEBUG: ${place.name} SHOWN ✅ ${phase} → ${gridKey} | temp:${place.temperature}°C score:${score} badges:${hasBadges}`);
+        }
       } else {
+        if (DEBUG_CITIES.some(c => place.name?.toLowerCase().includes(c))) {
+          console.log(`🔍 DEBUG: ${place.name} NOT shown - too close to existing marker (minDist: ${minDistance}km)`);
+        }
         skipped++;
       }
+    }
+    
+    // DEBUG: Check Pittsburgh AFTER the loop
+    for (const debugCity of DEBUG_CITIES) {
+      const inCandidates = candidates.find(p => p.name?.toLowerCase().includes(debugCity));
+      const inSorted = sorted.find(p => p.name?.toLowerCase().includes(debugCity));
+      const inResult = result.find(p => p.name?.toLowerCase().includes(debugCity));
+      const sortedIdx = inSorted ? sorted.indexOf(inSorted) : -1;
+      const score = inSorted ? (inSorted.attractivenessScore || inSorted.attractiveness_score || '?') : '?';
+      const temp = inSorted ? inSorted.temperature : '?';
+      console.log(`🔍 PITTSBURGH TRACE: inDB:${!!inCandidates} inSorted:${!!inSorted}(#${sortedIdx}/${sorted.length}) inResult:${!!inResult} | temp:${temp}°C score:${score} maxMarkers:${maxMarkers}`);
     }
     
     const finalBadgeCount = result.filter(p => getMapBadges(p.badges).length > 0).length;
@@ -1041,7 +1081,13 @@ const MapScreen = ({ navigation }) => {
 
         {/* Greedy-filtered markers based on zoom + score */}
         {visibleMarkers
-          .filter(dest => !showOnlyBadges || getMapBadges(dest.badges).length > 0) // Filter by MAP badges if toggle active
+          .filter(dest => {
+            if (!showOnlyBadges) return true;
+            // When trophy filter active, hide WARM_AND_DRY and SUNNY_STREAK
+            const HIDDEN_IN_TROPHY_VIEW = ['WARM_AND_DRY', 'SUNNY_STREAK'];
+            const visibleBadges = getMapBadges(dest.badges).filter(b => !HIDDEN_IN_TROPHY_VIEW.includes(b));
+            return visibleBadges.length > 0;
+          })
           .map((dest, index) => (
           <Marker
             key={`${dest.lat}-${dest.lon}-${index}`}
@@ -1108,14 +1154,37 @@ const MapScreen = ({ navigation }) => {
       )}
 
       {/* Empty state when trophy filter is active but no places */}
-      {showOnlyBadges && !loadingDestinations && visibleMarkers.filter(dest => getMapBadges(dest.badges).length > 0).length === 0 && (
-        <View style={[styles.emptyStateOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]}>
+      {showOnlyBadges && !loadingDestinations && visibleMarkers.filter(dest => {
+        const HIDDEN_IN_TROPHY_VIEW = ['WARM_AND_DRY', 'SUNNY_STREAK'];
+        const visibleBadges = getMapBadges(dest.badges).filter(b => !HIDDEN_IN_TROPHY_VIEW.includes(b));
+        return visibleBadges.length > 0;
+      }).length === 0 && (
+        <View style={[styles.emptyStateOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]} pointerEvents="box-none">
           <View style={[styles.emptyStateBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text style={styles.emptyStateIcon}>🏆</Text>
-            <Text style={[styles.emptyStateTitle, { color: theme.text }]}>Keine sonnigen Orte verfügbar</Text>
+            <Text style={[styles.emptyStateTitle, { color: theme.text }]}>Keine Highlights</Text>
             <Text style={[styles.emptyStateMessage, { color: theme.textSecondary }]}>
-              Entweder Radius erweitern oder Filter deaktivieren
+              in {radius} km Radius
             </Text>
+            <TouchableOpacity
+              style={styles.emptyStatePrimaryButton}
+              onPress={() => {
+                const newRadius = Math.min(radius * 2, 5000);
+                setRadius(newRadius);
+                playTickSound();
+              }}
+            >
+              <Text style={styles.emptyStatePrimaryButtonText}>Radius erweitern</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.emptyStateSecondaryButton}
+              onPress={() => {
+                setShowOnlyBadges(false);
+                playTickSound();
+              }}
+            >
+              <Text style={[styles.emptyStateSecondaryButtonText, { color: theme.textSecondary }]}>Alle Orte anzeigen</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -1974,34 +2043,56 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    pointerEvents: 'none', // Allow interaction with map behind
   },
   emptyStateBox: {
-    padding: 30,
+    padding: 32,
+    paddingHorizontal: 40,
     borderRadius: 20,
-    borderWidth: 3,
+    borderWidth: 1,
     alignItems: 'center',
-    maxWidth: '80%',
+    maxWidth: '75%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
     elevation: 10,
   },
   emptyStateIcon: {
-    fontSize: 64,
+    fontSize: 36,
     marginBottom: 16,
   },
   emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
     textAlign: 'center',
   },
   emptyStateMessage: {
-    fontSize: 18,
+    fontSize: 15,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  emptyStatePrimaryButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyStatePrimaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyStateSecondaryButton: {
+    paddingVertical: 8,
+  },
+  emptyStateSecondaryButtonText: {
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });
 

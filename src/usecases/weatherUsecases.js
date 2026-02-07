@@ -48,9 +48,11 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
   });
   
   // Limit certain badges to prevent overcrowding
-  const MAX_WORTH_THE_DRIVE_BADGES = 3;
+  const MAX_WORTH_THE_DRIVE_BADGES = 5;
+  const MAX_BUDGET_BADGES = 2;
+  const MIN_BADGE_DISTANCE_KM = 20;
   
-  // "Worth the Drive Budget" - RANKING SYSTEM: Only TOP 1 gets the badge!
+  // "Worth the Drive Budget" - RANKING SYSTEM: Top 2 get the badge!
   // Award this FIRST before Worth the Drive
   const budgetCandidates = destinations
     .filter(d => !d.isCurrentLocation && d._worthTheDriveBudgetData?.isEligible)
@@ -73,23 +75,37 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
     console.log(`  ${i+1}. ${c.name}: eff=${data.efficiency.toFixed(4)}, temp=${c.temperature}°C, delta=+${data.tempDelta}°C, dist=${data.distance}km`);
   });
   
-  // Award badge ONLY to the best one
-  if (budgetCandidates.length > 0) {
-    const winner = budgetCandidates[0];
-    winner.badges.push('WORTH_THE_DRIVE_BUDGET');
-    // REMOVE Worth the Drive if present (Budget is exclusive!)
-    winner.badges = winner.badges.filter(b => b !== 'WORTH_THE_DRIVE');
-    console.log(
-      `💰 ${winner.name}: Budget Winner! ` +
-      `Efficiency: ${winner._worthTheDriveBudgetData.efficiency.toFixed(3)} °C/km, ` +
-      `Temp: +${winner._worthTheDriveBudgetData.tempDelta}°C, ` +
-      `Distance: ${winner._worthTheDriveBudgetData.distance}km`
-    );
+  // Award badge to top N budget candidates (with distance check)
+  const selectedBudgetBadges = [];
+  for (const candidate of budgetCandidates) {
+    if (selectedBudgetBadges.length >= MAX_BUDGET_BADGES) break;
+    
+    const tooClose = selectedBudgetBadges.some(selected => {
+      const dist = getDistanceKm(
+        candidate.lat || candidate.latitude,
+        candidate.lon || candidate.longitude,
+        selected.lat || selected.latitude,
+        selected.lon || selected.longitude
+      );
+      return dist < MIN_BADGE_DISTANCE_KM;
+    });
+    
+    if (!tooClose) {
+      candidate.badges.push('WORTH_THE_DRIVE_BUDGET');
+      // REMOVE Worth the Drive if present (Budget is exclusive!)
+      candidate.badges = candidate.badges.filter(b => b !== 'WORTH_THE_DRIVE');
+      selectedBudgetBadges.push(candidate);
+      console.log(
+        `💰 ${candidate.name}: Budget #${selectedBudgetBadges.length}! ` +
+        `Efficiency: ${candidate._worthTheDriveBudgetData.efficiency.toFixed(3)} °C/km, ` +
+        `Temp: +${candidate._worthTheDriveBudgetData.tempDelta}°C, ` +
+        `Distance: ${candidate._worthTheDriveBudgetData.distance}km`
+      );
+    }
   }
   
-  // Limit "Worth the Drive" to top 3 by temperature, with MIN 20km distance between badges
+  // Limit "Worth the Drive" to top 5 by temperature, with MIN 20km distance between badges
   // EXCLUDE destinations that already have Budget badge!
-  const MIN_BADGE_DISTANCE_KM = 20;
   const worthTheDriveCandidates = destinations
     .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE') && !d.badges.includes('WORTH_THE_DRIVE_BUDGET'))
     .sort((a, b) => (b._worthTheDriveData?.tempDest || 0) - (a._worthTheDriveData?.tempDest || 0));
@@ -395,6 +411,14 @@ export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCon
 
   // Apply badges to all destinations
   applyBadgesToDestinations(filteredPlaces, currentLocationWeather, userLat, userLon);
+
+  // DEBUG: Is Pittsburgh in final result?
+  const debugPitt = filteredPlaces.find(p => p.name?.toLowerCase().includes('pittsburgh'));
+  if (debugPitt) {
+    console.log(`🔍 PITTSBURGH in weatherUsecases result ✅ temp=${debugPitt.temperature} badges=${debugPitt.badges?.length || 0}`);
+  } else {
+    console.log(`🔍 PITTSBURGH NOT in weatherUsecases result ❌ (${filteredPlaces.length} places returned)`);
+  }
 
   return filteredPlaces;
 };
