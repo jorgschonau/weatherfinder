@@ -126,21 +126,7 @@ const SettingsScreen = ({ navigation }) => {
             </View>
             <Text style={[styles.arrow, { color: theme.textSecondary }]}>›</Text>
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              { backgroundColor: theme.surface, borderBottomColor: theme.background }
-            ]}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text style={styles.settingItemFlag}>🔐</Text>
-            <Text style={[styles.settingItemText, { color: theme.text }]}>
-              {t('auth.login')}
-            </Text>
-            <Text style={[styles.arrow, { color: theme.textSecondary }]}>›</Text>
-          </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       <View style={[styles.section, { backgroundColor: theme.surface }]}>

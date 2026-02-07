@@ -130,6 +130,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const resetPassword = async (email) => {
+    try {
+      const { error } = await authService.resetPassword(email);
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return { error };
+    }
+  };
+
   const updateProfile = async (updates) => {
     try {
       if (!user) throw new Error('No user logged in');
@@ -158,6 +169,7 @@ export const AuthProvider = ({ children }) => {
     signUp,
     signIn,
     signOut,
+    resetPassword,
     updateProfile,
     refreshProfile: () => user && loadProfile(user.id),
   };

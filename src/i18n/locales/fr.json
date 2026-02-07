@@ -247,7 +247,17 @@
     "tryAgain": "Veuillez réessayer",
     "success": "Succès",
     "accountCreated": "Votre compte a été créé avec succès!",
-    "confirmSignOut": "Voulez-vous vraiment vous déconnecter?"
+    "confirmSignOut": "Voulez-vous vraiment vous déconnecter?",
+    "invalidEmail": "Veuillez saisir une adresse email valide",
+    "emailAlreadyExists": "Un compte avec cet email existe déjà",
+    "forgotPasswordTitle": "Réinitialiser le mot de passe",
+    "forgotPasswordSubtitle": "Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+    "sendResetLink": "Envoyer le lien",
+    "backToLogin": "Retour à la connexion",
+    "resetEmailSent": "Email envoyé",
+    "resetEmailSentMessage": "Nous avons envoyé un lien de réinitialisation à {{email}}. Veuillez vérifier votre boîte de réception.",
+    "resetPasswordFailed": "Échec de l'envoi de l'email. Veuillez réessayer.",
+    "resendEmail": "Pas reçu? Renvoyer"
   },
   "profile": {
     "accountInfo": "Informations du compte",

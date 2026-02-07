@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 // Supabase Configuration
@@ -7,14 +8,13 @@ const SUPABASE_URL = Constants.expoConfig?.extra?.supabaseUrl || '';
 const SUPABASE_ANON_KEY = Constants.expoConfig?.extra?.supabaseAnonKey || '';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('⚠️  Supabase credentials not configured. Auth features will be disabled.');
+  console.warn('Supabase credentials not configured. Auth features will be disabled.');
 }
 
-// Create Supabase client
+// Create Supabase client with AsyncStorage for session persistence
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    // Use AsyncStorage for session persistence
-    storage: null, // Will be set up in auth context
+    storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

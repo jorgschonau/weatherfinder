@@ -24,13 +24,10 @@ export const getFavourites = async () => {
         places (
           id,
           name,
-          description,
           latitude,
           longitude,
-          place_type,
-          rating_avg,
-          rating_count,
-          amenities
+          country_code,
+          place_type
         )
       `)
       .eq('user_id', user.id)
@@ -44,11 +41,8 @@ export const getFavourites = async () => {
       lat: fav.places.latitude,
       lon: fav.places.longitude,
       name: fav.places.name,
-      description: fav.places.description,
+      country_code: fav.places.country_code,
       place_type: fav.places.place_type,
-      rating_avg: fav.places.rating_avg,
-      rating_count: fav.places.rating_count,
-      amenities: fav.places.amenities,
       notes: fav.notes,
       savedAt: fav.created_at,
       placeId: fav.places.id,

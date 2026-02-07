@@ -37,6 +37,8 @@ export default function ProfileScreen({ navigation }) {
   const styles = createStyles(theme);
 
   if (!isAuthenticated) {
+    // User must be authenticated to view the profile.
+    // If session expired, sign out to redirect to auth screens.
     return (
       <View style={styles.container}>
         <View style={styles.centerContent}>
@@ -46,16 +48,9 @@ export default function ProfileScreen({ navigation }) {
           
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => signOut()}
           >
             <Text style={styles.primaryButtonText}>{t('auth.login')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate('Register')}
-          >
-            <Text style={styles.secondaryButtonText}>{t('auth.signUp')}</Text>
           </TouchableOpacity>
         </View>
       </View>

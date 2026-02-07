@@ -15,6 +15,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useTranslation } from 'react-i18next';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function RegisterScreen({ navigation }) {
   const { signUp } = useAuth();
   const { theme } = useTheme();
@@ -25,7 +27,23 @@ export default function RegisterScreen({ navigation }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+
+  const validateEmail = (value) => {
+    if (!value.trim()) {
+      setEmailError(t('auth.fillAllFields'));
+      return false;
+    }
+    if (!EMAIL_REGEX.test(value.trim())) {
+      setEmailError(t('auth.invalidEmail'));
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
 
   const handleRegister = async () => {
     // Validation
@@ -33,6 +51,8 @@ export default function RegisterScreen({ navigation }) {
       Alert.alert(t('auth.error'), t('auth.fillAllFields'));
       return;
     }
+
+    if (!validateEmail(email)) return;
 
     if (password !== confirmPassword) {
       Alert.alert(t('auth.error'), t('auth.passwordsDontMatch'));
@@ -51,25 +71,27 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     const { error } = await signUp(
-      email,
+      email.trim(),
       password,
-      username,
-      displayName || username
+      username.trim(),
+      displayName.trim() || username.trim()
     );
     setLoading(false);
 
     if (error) {
-      Alert.alert(
-        t('auth.registrationFailed'),
-        error.message || t('auth.tryAgain')
-      );
+      // Map common Supabase error messages to user-friendly text
+      let errorMessage = error.message || t('auth.tryAgain');
+      if (error.message?.includes('already registered')) {
+        errorMessage = t('auth.emailAlreadyExists');
+      }
+      Alert.alert(t('auth.registrationFailed'), errorMessage);
     } else {
       Alert.alert(
         t('auth.success'),
         t('auth.accountCreated'),
         [{ text: 'OK' }]
       );
-      // Navigation handled by AuthNavigator
+      // Navigation handled by auth state change in App.js
     }
   };
 
@@ -122,45 +144,74 @@ export default function RegisterScreen({ navigation }) {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>{t('auth.email')} *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, emailError ? styles.inputError : null]}
               placeholder={t('auth.emailPlaceholder')}
               placeholderTextColor={theme.textSecondary}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (emailError) validateEmail(text);
+              }}
+              onBlur={() => email && validateEmail(email)}
               autoCapitalize="none"
               keyboardType="email-address"
               autoComplete="email"
               editable={!loading}
             />
+            {emailError ? (
+              <Text style={styles.errorText}>{emailError}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>{t('auth.password')} *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('auth.passwordPlaceholder')}
-              placeholderTextColor={theme.textSecondary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="password"
-              editable={!loading}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder={t('auth.passwordPlaceholder')}
+                placeholderTextColor={theme.textSecondary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.eyeIcon}>
+                  {showPassword ? '🙈' : '👁️'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.hint}>{t('auth.minSixChars')}</Text>
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>{t('auth.confirmPassword')} *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('auth.confirmPasswordPlaceholder')}
-              placeholderTextColor={theme.textSecondary}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              autoComplete="password"
-              editable={!loading}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder={t('auth.confirmPasswordPlaceholder')}
+                placeholderTextColor={theme.textSecondary}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoComplete="password"
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.eyeIcon}>
+                  {showConfirmPassword ? '🙈' : '👁️'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -184,14 +235,6 @@ export default function RegisterScreen({ navigation }) {
               <Text style={styles.linkText}>{t('auth.login')}</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={() => navigation.replace('Main')}
-            disabled={loading}
-          >
-            <Text style={styles.skipText}>{t('auth.continueWithoutAccount')}</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -250,10 +293,39 @@ const createStyles = (theme) =>
       fontSize: 16,
       color: theme.text,
     },
+    inputError: {
+      borderColor: theme.error || '#FF3B30',
+    },
+    errorText: {
+      color: theme.error || '#FF3B30',
+      fontSize: 13,
+      marginTop: 6,
+    },
     hint: {
       fontSize: 12,
       color: theme.textSecondary,
       marginTop: 4,
+    },
+    passwordContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.cardBackground,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 12,
+    },
+    passwordInput: {
+      flex: 1,
+      padding: 14,
+      fontSize: 16,
+      color: theme.text,
+    },
+    eyeButton: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    eyeIcon: {
+      fontSize: 20,
     },
     button: {
       backgroundColor: theme.primary,
@@ -292,14 +364,4 @@ const createStyles = (theme) =>
       fontSize: 14,
       fontWeight: '600',
     },
-    skipButton: {
-      marginTop: 20,
-      alignItems: 'center',
-    },
-    skipText: {
-      color: theme.textSecondary,
-      fontSize: 14,
-    },
   });
-
-

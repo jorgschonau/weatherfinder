@@ -9,6 +9,10 @@ import {
 /**
  * Favourites Use-Cases
  * Business logic for managing favourite destinations
+ * 
+ * Currently uses AsyncStorage for local persistence.
+ * Supabase-based favourites (src/services/favouritesService.js) are available
+ * for future cloud sync once a migration path from local to Supabase is built.
  */
 
 /**
@@ -94,4 +98,3 @@ export const isDestinationFavourite = async (lat, lon) => {
 export const clearAllFavouritesUseCase = async () => {
   return await clearAllFavourites();
 };
-
