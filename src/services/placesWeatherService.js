@@ -106,9 +106,9 @@ export const getPlacesWithWeather = async (filters = {}) => {
       return { places: [], error: null };
     }
     
-    // Query 2: Get weather for places (keep 3 days for badges)
+    // Query 2: Get weather for places (5 days for forecast display)
     const placeIds = places.map(p => p.id);
-    const fallbackDate = new Date(new Date(targetDate).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const fallbackDate = new Date(new Date(targetDate).getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     console.log(`🌤️ Fetching weather for ${placeIds.length} places (${targetDate} to ${fallbackDate})...`);
     
     let allWeather = [];
@@ -123,7 +123,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
         .select('place_id, forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, sunshine_duration, fetched_at, humidity')
         .in('place_id', chunk)
         .gte('forecast_date', targetDate)
-        .lte('forecast_date', fallbackDate)  // Keep 3 days for badges
+        .lte('forecast_date', fallbackDate)  // 5 days for forecast
         .gte('fetched_at', sevenDaysAgo)
         .order('forecast_date', { ascending: true });
       
@@ -134,19 +134,21 @@ export const getPlacesWithWeather = async (filters = {}) => {
     
     console.log(`🌤️ Got ${allWeather.length} weather records (${targetDate} - ${fallbackDate})`);
     
-    // Build weather map with forecast for multiple days
+    // Build weather map with forecast for multiple days (5 days)
     const weatherMap = {};
     allWeather.forEach(w => {
       if (!weatherMap[w.place_id]) {
-        weatherMap[w.place_id] = { today: null, tomorrow: null, day2: null, day3: null };
+        weatherMap[w.place_id] = { today: null, tomorrow: null, day2: null, day3: null, day4: null, day5: null };
       }
       
       const entry = weatherMap[w.place_id];
-      // Fill in order: today, tomorrow, day2, day3
+      // Fill in order: today, tomorrow, day2, day3, day4, day5
       if (!entry.today) entry.today = w;
       else if (!entry.tomorrow) entry.tomorrow = w;
       else if (!entry.day2) entry.day2 = w;
       else if (!entry.day3) entry.day3 = w;
+      else if (!entry.day4) entry.day4 = w;
+      else if (!entry.day5) entry.day5 = w;
     });
     
     // Helper to map weather_main to condition
@@ -168,8 +170,10 @@ export const getPlacesWithWeather = async (filters = {}) => {
       const tomorrow = wData.tomorrow;
       const day2 = wData.day2;
       const day3 = wData.day3;
+      const day4 = wData.day4;
+      const day5 = wData.day5;
       
-      // Build forecast structure for badges AND UI display
+      // Build forecast structure for badges AND UI display (5 days)
       const forecast = {
         today: today ? {
           condition: getCondition(today.weather_main),
@@ -198,6 +202,20 @@ export const getPlacesWithWeather = async (filters = {}) => {
           high: Math.round(day3.temp_max),
           low: Math.round(day3.temp_min),
           description: day3.weather_description,
+        } : null,
+        day4: day4 ? {
+          condition: getCondition(day4.weather_main),
+          temp: day4.temp_max,
+          high: Math.round(day4.temp_max),
+          low: Math.round(day4.temp_min),
+          description: day4.weather_description,
+        } : null,
+        day5: day5 ? {
+          condition: getCondition(day5.weather_main),
+          temp: day5.temp_max,
+          high: Math.round(day5.temp_max),
+          low: Math.round(day5.temp_min),
+          description: day5.weather_description,
         } : null,
       };
       

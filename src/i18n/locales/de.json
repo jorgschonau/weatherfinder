@@ -250,21 +250,24 @@
     "confirmSignOut": "Möchtest du dich wirklich abmelden?",
     "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
     "emailAlreadyExists": "Ein Account mit dieser E-Mail existiert bereits",
-    "forgotPasswordTitle": "Passwort zurücksetzen",
-    "forgotPasswordSubtitle": "Gib deine E-Mail-Adresse ein und wir senden dir einen Link zum Zurücksetzen deines Passworts.",
-    "sendResetLink": "Reset-Link senden",
-    "backToLogin": "Zurück zur Anmeldung",
-    "resetEmailSent": "E-Mail gesendet",
-    "resetEmailSentMessage": "Wir haben einen Link zum Zurücksetzen deines Passworts an {{email}} gesendet. Bitte überprüfe deinen Posteingang.",
-    "resetPasswordFailed": "Fehler beim Senden der E-Mail. Bitte versuche es erneut.",
-    "resendEmail": "Nicht erhalten? Erneut senden"
+    "forgotPasswordTitle": "Passwort vergessen?",
+    "forgotPasswordSubtitle": "Wir senden dir einen Reset-Link",
+    "sendResetLink": "Link senden",
+    "backToLogin": "Zurück zum Login",
+    "resetEmailSent": "Link gesendet!",
+    "resetEmailSentMessage": "Schau in dein Postfach",
+    "resetPasswordFailed": "E-Mail konnte nicht gesendet werden. Bitte versuche es erneut.",
+    "resendEmail": "Nochmal senden"
   },
   "profile": {
     "accountInfo": "Kontoinformationen",
     "location": "Standort",
-    "memberSince": "Mitglied seit",
-    "actions": "Aktionen",
-    "editProfile": "Profil bearbeiten"
+    "memberSince": "Dabei seit",
+    "favourites": "Favoriten",
+    "actions": "Account",
+    "editProfile": "Profil bearbeiten",
+    "changeEmail": "E-Mail ändern",
+    "changePassword": "Passwort ändern"
   }
 }
 

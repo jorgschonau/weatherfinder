@@ -250,21 +250,24 @@
     "confirmSignOut": "Voulez-vous vraiment vous déconnecter?",
     "invalidEmail": "Veuillez saisir une adresse email valide",
     "emailAlreadyExists": "Un compte avec cet email existe déjà",
-    "forgotPasswordTitle": "Réinitialiser le mot de passe",
-    "forgotPasswordSubtitle": "Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+    "forgotPasswordTitle": "Mot de passe oublié ?",
+    "forgotPasswordSubtitle": "On t'envoie un lien de réinitialisation",
     "sendResetLink": "Envoyer le lien",
-    "backToLogin": "Retour à la connexion",
-    "resetEmailSent": "Email envoyé",
-    "resetEmailSentMessage": "Nous avons envoyé un lien de réinitialisation à {{email}}. Veuillez vérifier votre boîte de réception.",
-    "resetPasswordFailed": "Échec de l'envoi de l'email. Veuillez réessayer.",
-    "resendEmail": "Pas reçu? Renvoyer"
+    "backToLogin": "Retour au login",
+    "resetEmailSent": "Lien envoyé !",
+    "resetEmailSentMessage": "Vérifie ta boîte mail",
+    "resetPasswordFailed": "Impossible d'envoyer l'email. Réessaie.",
+    "resendEmail": "Renvoyer"
   },
   "profile": {
     "accountInfo": "Informations du compte",
     "location": "Localisation",
     "memberSince": "Membre depuis",
-    "actions": "Actions",
-    "editProfile": "Modifier le profil"
+    "favourites": "Favoris",
+    "actions": "Compte",
+    "editProfile": "Modifier le profil",
+    "changeEmail": "Changer l'email",
+    "changePassword": "Changer le mot de passe"
   }
 }
 

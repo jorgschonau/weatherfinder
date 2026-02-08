@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -147,9 +148,11 @@ export default function LoginScreen({ navigation }) {
                 onPress={() => setShowPassword(!showPassword)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.eyeIcon}>
-                  {showPassword ? '🙈' : '👁️'}
-                </Text>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={BRAND.textMuted}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -295,11 +298,11 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
   },
   eyeButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  eyeIcon: {
-    fontSize: 20,
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 44,
+    height: 44,
   },
 
   // --- Forgot Password ---

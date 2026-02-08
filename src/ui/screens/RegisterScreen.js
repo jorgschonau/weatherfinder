@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useTranslation } from 'react-i18next';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -181,9 +182,11 @@ export default function RegisterScreen({ navigation }) {
                 onPress={() => setShowPassword(!showPassword)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.eyeIcon}>
-                  {showPassword ? '🙈' : '👁️'}
-                </Text>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={theme.textSecondary}
+                />
               </TouchableOpacity>
             </View>
             <Text style={styles.hint}>{t('auth.minSixChars')}</Text>
@@ -207,9 +210,11 @@ export default function RegisterScreen({ navigation }) {
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.eyeIcon}>
-                  {showConfirmPassword ? '🙈' : '👁️'}
-                </Text>
+                <Ionicons
+                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={theme.textSecondary}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -321,11 +326,11 @@ const createStyles = (theme) =>
       color: theme.text,
     },
     eyeButton: {
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-    },
-    eyeIcon: {
-      fontSize: 20,
+      padding: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: 44,
+      height: 44,
     },
     button: {
       backgroundColor: theme.primary,

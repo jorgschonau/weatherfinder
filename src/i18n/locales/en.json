@@ -250,21 +250,24 @@
     "confirmSignOut": "Are you sure you want to sign out?",
     "invalidEmail": "Please enter a valid email address",
     "emailAlreadyExists": "An account with this email already exists",
-    "forgotPasswordTitle": "Reset Password",
-    "forgotPasswordSubtitle": "Enter your email address and we'll send you a link to reset your password.",
-    "sendResetLink": "Send Reset Link",
+    "forgotPasswordTitle": "Forgot password?",
+    "forgotPasswordSubtitle": "We'll send you a reset link",
+    "sendResetLink": "Send link",
     "backToLogin": "Back to Login",
-    "resetEmailSent": "Check Your Email",
-    "resetEmailSentMessage": "We've sent a password reset link to {{email}}. Please check your inbox and follow the instructions.",
-    "resetPasswordFailed": "Failed to send reset email. Please try again.",
-    "resendEmail": "Didn't receive it? Send again"
+    "resetEmailSent": "Link sent!",
+    "resetEmailSentMessage": "Check your inbox",
+    "resetPasswordFailed": "Could not send email. Please try again.",
+    "resendEmail": "Send again"
   },
   "profile": {
     "accountInfo": "Account Information",
     "location": "Location",
     "memberSince": "Member since",
-    "actions": "Actions",
-    "editProfile": "Edit Profile"
+    "favourites": "Favourites",
+    "actions": "Account",
+    "editProfile": "Edit Profile",
+    "changeEmail": "Change email",
+    "changePassword": "Change password"
   }
 }
 
