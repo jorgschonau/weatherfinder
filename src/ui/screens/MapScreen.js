@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -61,7 +61,7 @@ const MapScreen = ({ navigation }) => {
   const boundsDebounceTimer = useRef(null); // Debounce timer for bounds changes
   const [radius, setRadius] = useState(500); // Default 500km
   const [selectedCondition, setSelectedCondition] = useState(null);
-  const [selectedDate, setSelectedDate] = useState('today'); // Date filter (mock for now)
+  const [selectedDateOffset, setSelectedDateOffset] = useState(0); // 0=today, 1=tomorrow, 3=+3days, 5=+5days
   const [loading, setLoading] = useState(true);
   const [loadingDestinations, setLoadingDestinations] = useState(false);
   const [mapType, setMapType] = useState('standard'); // standard, satellite, hybrid, terrain, mutedStandard
@@ -94,6 +94,19 @@ const MapScreen = ({ navigation }) => {
         }
       } catch (error) {
         console.warn('Failed to load saved center point:', error);
+      }
+
+      // Load saved date offset
+      try {
+        const savedDateOffset = await AsyncStorage.getItem('selectedDateOffset');
+        if (savedDateOffset !== null) {
+          const offset = parseInt(savedDateOffset, 10);
+          if ([0, 1, 3, 5].includes(offset)) {
+            setSelectedDateOffset(offset);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load saved date offset:', error);
       }
 
       // Load cached destinations
@@ -139,6 +152,13 @@ const MapScreen = ({ navigation }) => {
     })();
   }, []);
 
+  // Persist selected date offset to AsyncStorage
+  useEffect(() => {
+    AsyncStorage.setItem('selectedDateOffset', selectedDateOffset.toString()).catch(err =>
+      console.warn('Failed to save date offset:', err)
+    );
+  }, [selectedDateOffset]);
+
   useEffect(() => {
     if (location) {
       console.log('🔄 Trigger: location/radius/condition/centerPoint/centerPointWeather changed, reloading destinations...');
@@ -172,18 +192,56 @@ const MapScreen = ({ navigation }) => {
     };
   }, [location, radius, selectedCondition, centerPoint, centerPointWeather]);
 
-  // Update visible markers ONLY when zoom or destinations change (NOT on pan/bounds)
+  /**
+   * Derive display destinations from raw data + selected date offset.
+   * Picks the right day's temperature/condition from stored forecast data.
+   * NO network request needed when date changes!
+   */
+  const displayDestinations = useMemo(() => {
+    const FORECAST_KEY_MAP = { 0: 'today', 1: 'tomorrow', 2: 'day2', 3: 'day3', 4: 'day4', 5: 'day5' };
+    const forecastKey = FORECAST_KEY_MAP[selectedDateOffset] || 'today';
+    
+    if (selectedDateOffset === 0) return destinations; // No mapping needed for today
+    
+    return destinations.map(dest => {
+      // Open-Meteo sourced data (currentLocation, centerPoint) — use forecastDays array
+      if (dest.forecastDays && dest.forecastDays[selectedDateOffset]) {
+        const dayData = dest.forecastDays[selectedDateOffset];
+        return {
+          ...dest,
+          temperature: dayData.temperature,
+          condition: dayData.condition,
+          temp_max: dayData.temp_max,
+          temp_min: dayData.temp_min,
+          windSpeed: dayData.windSpeed,
+          precipitation: dayData.precipitation,
+        };
+      }
+      // Supabase sourced data (regular destinations) — use forecast keyed object
+      if (dest.forecast && dest.forecast[forecastKey]) {
+        const dayData = dest.forecast[forecastKey];
+        return {
+          ...dest,
+          temperature: dayData.high ?? dayData.temp ?? dest.temperature,
+          condition: dayData.condition ?? dest.condition,
+        };
+      }
+      return dest;
+    });
+  }, [destinations, selectedDateOffset]);
+
+  // Update visible markers when display data or zoom changes (NOT on pan/bounds)
   useEffect(() => {
-    if (destinations.length > 0) {
-      const visible = getVisibleMarkers(destinations, currentZoom, currentBounds);
+    if (displayDestinations.length > 0) {
+      const visible = getVisibleMarkers(displayDestinations, currentZoom, currentBounds);
       setVisibleMarkers(visible);
       
       const specialCount = visible.filter(v => v.isCurrentLocation || v.isCenterPoint).length;
       const badgeCount = visible.filter(v => getMapBadges(v.badges).length > 0 && !v.isCurrentLocation && !v.isCenterPoint).length;
       const regularCount = visible.length - specialCount - badgeCount;
-      console.log(`🔍 Zoom ${currentZoom}: ${visible.length} markers (${specialCount} special + ${badgeCount} map badges + ${regularCount} regular) of ${destinations.length}`);
+      console.log(`🔍 Zoom ${currentZoom}: ${visible.length} markers (${specialCount} special + ${badgeCount} map badges + ${regularCount} regular) of ${displayDestinations.length}`);
     }
-  }, [destinations, currentZoom]);
+  }, [displayDestinations, currentZoom]);
 
   const loadDestinations = async () => {
     if (!location) return;
@@ -293,7 +351,7 @@ const MapScreen = ({ navigation }) => {
         console.warn('Reverse geocoding failed:', geoError);
       }
 
-      // Use Open-Meteo API for current location - fetch DAILY max temp
+      // Use Open-Meteo API for current location - fetch 6 days for date filter
       const params = new URLSearchParams({
         latitude: location.latitude,
         longitude: location.longitude,
@@ -309,7 +367,7 @@ const MapScreen = ({ navigation }) => {
           'cloud_cover',
         ].join(','),
         timezone: 'auto',
-        forecast_days: 1,
+        forecast_days: 6,
       });
 
       const url = `https://api.open-meteo.com/v1/forecast?${params}`;
@@ -321,15 +379,25 @@ const MapScreen = ({ navigation }) => {
       const daily = data.daily;
       const current = data.current || {};
 
-      // Map to app format - use MAX temp for the day
+      // Build forecastDays array (index 0 = today, 1 = tomorrow, etc.)
+      const forecastDaysArr = daily.weather_code?.map((code, i) => ({
+        condition: mapWeatherCodeToCondition(code),
+        temperature: Math.round(daily.temperature_2m_max?.[i] || 0),
+        temp_max: daily.temperature_2m_max?.[i],
+        temp_min: daily.temperature_2m_min?.[i],
+        windSpeed: Math.round(daily.wind_speed_10m_max?.[i] || 0),
+        precipitation: daily.precipitation_sum?.[i] || 0,
+      })) || [];
+
+      // Default display: today's data (offset applied later via useMemo)
       const condition = mapWeatherCodeToCondition(daily.weather_code?.[0]);
       
       return {
         lat: location.latitude,
         lon: location.longitude,
-        name: `📍 ${cityName}`, // Use geocoded city name
+        name: `📍 ${cityName}`,
         condition,
-        temperature: Math.round(daily.temperature_2m_max?.[0] || 0), // MAX temp!
+        temperature: Math.round(daily.temperature_2m_max?.[0] || 0),
         temp_max: daily.temperature_2m_max?.[0],
         temp_min: daily.temperature_2m_min?.[0],
         humidity: current.relative_humidity_2m,
@@ -338,8 +406,9 @@ const MapScreen = ({ navigation }) => {
         cloudCover: current.cloud_cover,
         stability: calculateStability(current.cloud_cover, daily.wind_speed_10m_max?.[0]),
         distance: 0,
-        isCurrentLocation: true, // Mark as current location
+        isCurrentLocation: true,
         badges: [],
+        forecastDays: forecastDaysArr, // All 6 days for date filter
       };
     } catch (error) {
       console.warn('Failed to fetch current location weather:', error);
@@ -373,7 +442,7 @@ const MapScreen = ({ navigation }) => {
   };
 
   const handleMarkerPress = (destination) => {
-    navigation.navigate('DestinationDetail', { destination });
+    navigation.navigate('DestinationDetail', { destination, selectedDateOffset });
   };
 
   const handleRadiusIncrease = async () => {
@@ -818,7 +887,7 @@ const MapScreen = ({ navigation }) => {
         console.warn('Reverse geocoding failed:', geoError);
       }
 
-      // Use Open-Meteo API - fetch DAILY max temp
+      // Use Open-Meteo API - fetch 6 days for date filter
       const params = new URLSearchParams({
         latitude: lat,
         longitude: lon,
@@ -834,7 +903,7 @@ const MapScreen = ({ navigation }) => {
           'cloud_cover',
         ].join(','),
         timezone: 'auto',
-        forecast_days: 1,
+        forecast_days: 6,
       });
 
       const url = `https://api.open-meteo.com/v1/forecast?${params}`;
@@ -849,7 +918,17 @@ const MapScreen = ({ navigation }) => {
       const daily = data.daily;
       const current = data.current || {};
 
-      // Map to app format - use MAX temp for the day
+      // Build forecastDays array (index 0 = today, 1 = tomorrow, etc.)
+      const forecastDaysArr = daily.weather_code?.map((code, i) => ({
+        condition: mapWeatherCodeToCondition(code),
+        temperature: Math.round(daily.temperature_2m_max?.[i] || 0),
+        temp_max: daily.temperature_2m_max?.[i],
+        temp_min: daily.temperature_2m_min?.[i],
+        windSpeed: Math.round(daily.wind_speed_10m_max?.[i] || 0),
+        precipitation: daily.precipitation_sum?.[i] || 0,
+      })) || [];
+
+      // Default display: today's data (offset applied later via useMemo)
       const condition = mapWeatherCodeToCondition(daily.weather_code?.[0]);
       
       const weatherData = {
@@ -857,7 +936,7 @@ const MapScreen = ({ navigation }) => {
         lon,
         name: `⊕ ${cityName}`,
         condition,
-        temperature: Math.round(daily.temperature_2m_max?.[0] || 0), // MAX temp!
+        temperature: Math.round(daily.temperature_2m_max?.[0] || 0),
         temp_max: daily.temperature_2m_max?.[0],
         temp_min: daily.temperature_2m_min?.[0],
         humidity: current.relative_humidity_2m,
@@ -865,8 +944,9 @@ const MapScreen = ({ navigation }) => {
         precipitation: daily.precipitation_sum?.[0] || 0,
         cloudCover: current.cloud_cover,
         stability: calculateStability(current.cloud_cover, daily.wind_speed_10m_max?.[0]),
-        isCenterPoint: true, // Mark as center point (like isCurrentLocation)
+        isCenterPoint: true,
         badges: [],
+        forecastDays: forecastDaysArr, // All 6 days for date filter
       };
       
       setCenterPointWeather(weatherData);
@@ -1310,8 +1390,8 @@ const MapScreen = ({ navigation }) => {
             shadowColor: theme.shadow
           }]}>
             <DateFilter
-              selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
+              selectedDateOffset={selectedDateOffset}
+              onDateOffsetChange={setSelectedDateOffset}
             />
             
             <View style={styles.filterSeparator} />

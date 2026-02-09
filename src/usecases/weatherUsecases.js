@@ -295,7 +295,7 @@ const applyBadgesToDestinations = (destinations, originLocation, originLat, orig
  * @param locale - Locale for translations (e.g. 'de', 'en')
  */
 export const getWeatherForRadius = async (userLat, userLon, radiusKm, desiredCondition = null, originTemp = null, locale = 'en') => {
-  // Fetch real places with weather data from Supabase
+  // Fetch real places with weather data from Supabase (always from today, date offset applied client-side)
   const { places, error } = await getPlacesWithWeather({
     userLat,
     userLon,

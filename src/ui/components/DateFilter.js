@@ -2,36 +2,59 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 const DATE_PRESETS = [
-  { value: 'today', label: 'Heute' },
-  { value: 'tomorrow', label: 'Morgen' },
-  { value: 'plus3', label: '+3' },
-  { value: 'plus5', label: '+5' },
+  { value: 0, line1: 'Heute', line2: null },
+  { value: 1, line1: 'Morgen', line2: null },
+  { value: 3, line1: '+3', line2: 'Tage' },
+  { value: 5, line1: '+5', line2: 'Tage' },
 ];
 
-const DateFilter = ({ selectedDate, onDateChange }) => {
+/**
+ * Format a date offset into a readable label
+ * 0 → "Heute", 1 → "Morgen", 3+ → "Fr, 9. Feb"
+ */
+const formatDateLabel = (offset) => {
+  if (offset === 0) return 'Heute';
+  if (offset === 1) return 'Morgen';
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+/**
+ * Convert offset to YYYY-MM-DD date string
+ */
+export const getTargetDate = (offset) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().split('T')[0];
+};
+
+const DateFilter = ({ selectedDateOffset, onDateOffsetChange }) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Datum</Text>
+      <Text style={styles.label}>
+        Wetter für {formatDateLabel(selectedDateOffset)}
+        {selectedDateOffset > 1 && (
+          <Text style={styles.dateSubLabel}> ({getTargetDate(selectedDateOffset)})</Text>
+        )}
+      </Text>
       <View style={styles.optionsWrapper}>
-        {DATE_PRESETS.map((preset, index) => {
-          const isSelected = selectedDate === preset.value;
-          const isLongButton = index < 2; // "Heute" und "Morgen"
+        {DATE_PRESETS.map((preset) => {
+          const isSelected = selectedDateOffset === preset.value;
           return (
             <TouchableOpacity
               key={preset.value}
-              style={[
-                styles.option,
-                isLongButton ? styles.optionLong : styles.optionShort,
-                isSelected && styles.optionSelected
-              ]}
-              onPress={() => onDateChange(preset.value)}
+              style={[styles.option, isSelected && styles.optionSelected]}
+              onPress={() => onDateOffsetChange(preset.value)}
             >
-              <Text style={[
-                styles.optionText,
-                isSelected && styles.optionTextSelected
-              ]}>
-                {preset.label}
+              <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                {preset.line1}
               </Text>
+              {preset.line2 && (
+                <Text style={[styles.optionTextSmall, isSelected && styles.optionTextSelected]}>
+                  {preset.line2}
+                </Text>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -45,41 +68,47 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1565C0',
     marginBottom: 10,
   },
+  dateSubLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+  },
   optionsWrapper: {
     flexDirection: 'row',
-    alignItems: 'center',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#1976D2',
+    borderColor: '#FF8C42',
     backgroundColor: 'white',
     padding: 4,
     gap: 6,
   },
   option: {
-    paddingHorizontal: 4,
-    paddingVertical: 10,
+    flex: 1,
+    paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  optionLong: {
-    flex: 1.5,
-  },
-  optionShort: {
-    flex: 0.75,
+    backgroundColor: 'white',
+    minHeight: 44,
   },
   optionSelected: {
-    backgroundColor: '#1976D2',
+    backgroundColor: '#FF8C42',
   },
   optionText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1976D2',
+    color: '#1565C0',
+  },
+  optionTextSmall: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1565C0',
+    marginTop: 1,
   },
   optionTextSelected: {
     color: 'white',

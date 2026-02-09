@@ -31,7 +31,7 @@ const getWindDescription = (windSpeed) => {
 const DestinationDetailScreen = ({ route, navigation }) => {
   const { t, i18n } = useTranslation();
   const { theme } = useTheme();
-  const { destination } = route.params;
+  const { destination, selectedDateOffset = 0 } = route.params;
   
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -40,14 +40,100 @@ const DestinationDetailScreen = ({ route, navigation }) => {
   const [favouriteLoading, setFavouriteLoading] = useState(false);
   const [expandedBadges, setExpandedBadges] = useState({});
 
+  /**
+   * Helper: Convert a forecastData entry (from Supabase) to the app forecast slot format
+   */
+  const toForecastSlot = (entry) => {
+    if (!entry) return null;
+    return {
+      condition: entry.condition,
+      temp: Math.round((entry.tempMin + entry.tempMax) / 2),
+      high: entry.tempMax,
+      low: entry.tempMin,
+      description: entry.weatherDescription,
+    };
+  };
+
+  /**
+   * Helper: Build 5 forecast slots starting from selectedDateOffset
+   * forecastData is indexed from today (index 0 = today, 1 = tomorrow, etc.)
+   */
+  const buildForecastSlots = (forecastData, fallbackPlace) => {
+    const startIdx = selectedDateOffset;
+    const keys = ['today', 'tomorrow', 'day3', 'day4', 'day5'];
+    const slots = {};
+    keys.forEach((key, i) => {
+      const entry = forecastData[startIdx + i];
+      if (entry) {
+        slots[key] = toForecastSlot(entry);
+      } else if (i === 0 && fallbackPlace) {
+        // First slot fallback: use place's current weather
+        slots[key] = {
+          condition: fallbackPlace.condition,
+          temp: fallbackPlace.temperature,
+          high: fallbackPlace.temperature,
+          low: fallbackPlace.temperature ? fallbackPlace.temperature - 3 : null,
+        };
+      } else {
+        slots[key] = null;
+      }
+    });
+    return slots;
+  };
+
   const loadForecast = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // If destination already has all forecast data (mock data or complete data), use it directly
+      // PRIORITY 1: Fetch from Supabase if destination has an ID (gets full 10-day forecast!)
+      if (destination.id) {
+        try {
+          const { place, forecast: forecastData, error: fetchError } = await getPlaceDetail(destination.id, i18n.language);
+          
+          if (fetchError || !place) {
+            throw new Error(fetchError || 'Failed to fetch place detail');
+          }
+          
+          // Build 5 forecast slots starting from selectedDateOffset
+          const forecastSlots = buildForecastSlots(forecastData, place);
+          
+          const convertedForecast = {
+            ...place,
+            name: destination.name, // Keep original name
+            description: place.weatherDescription || `${place.condition} conditions`,
+            forecast: forecastSlots,
+          };
+          
+          // IMPORTANT: Keep badges from original destination (calculated on map)
+          if (destination.badges) {
+            convertedForecast.badges = destination.badges;
+            convertedForecast._worthTheDriveData = destination._worthTheDriveData;
+            convertedForecast._worthTheDriveBudgetData = destination._worthTheDriveBudgetData;
+            convertedForecast._warmAndDryData = destination._warmAndDryData;
+            convertedForecast._beachParadiseData = destination._beachParadiseData;
+            convertedForecast._sunnyStreakData = destination._sunnyStreakData;
+            convertedForecast._weatherMiracleData = destination._weatherMiracleData;
+            convertedForecast._heatwaveData = destination._heatwaveData;
+            convertedForecast._snowKingData = destination._snowKingData;
+            convertedForecast._rainyDaysData = destination._rainyDaysData;
+            convertedForecast._weatherCurseData = destination._weatherCurseData;
+            convertedForecast._springAwakeningData = destination._springAwakeningData;
+          }
+          
+          setForecast(convertedForecast);
+          setIsLoading(false);
+          return;
+        } catch (fetchError) {
+          console.warn(`⚠️ Supabase fetch failed for ${destination.name}, using inline forecast fallback:`, fetchError);
+          // Fall through to destination.forecast or generated fallback
+        }
+      }
+      
+      // PRIORITY 2: Use inline forecast data from map
+      // Map data forecast is already relative to the selected date (targetDate)
+      // So today=selected day, tomorrow=selected+1, etc.
       if (destination.forecast) {
-        // Ensure forecast has the expected structure with high/low (5 days)
         const normalizedForecast = {
           today: destination.forecast.today ? {
             ...destination.forecast.today,
@@ -88,95 +174,18 @@ const DestinationDetailScreen = ({ route, navigation }) => {
         return;
       }
       
-      // Fetch from Supabase if destination has an ID
-      if (destination.id) {
-        try {
-          const { place, forecast: forecastData, error: fetchError } = await getPlaceDetail(destination.id, i18n.language);
-          
-          if (fetchError || !place) {
-            throw new Error(fetchError || 'Failed to fetch place detail');
-          }
-          
-          // Convert Supabase forecast data to expected format (5 days)
-          const convertedForecast = {
-            ...place,
-            name: destination.name, // Keep original name
-            description: place.weatherDescription || `${place.condition} conditions`,
-            forecast: {
-              today: forecastData[0] ? {
-                condition: forecastData[0].condition,
-                temp: Math.round((forecastData[0].tempMin + forecastData[0].tempMax) / 2),
-                high: forecastData[0].tempMax,
-                low: forecastData[0].tempMin,
-              } : {
-                condition: place.condition,
-                temp: place.temperature,
-                high: place.temperature + 3,
-                low: place.temperature - 3,
-              },
-              tomorrow: forecastData[1] ? {
-                condition: forecastData[1].condition,
-                temp: Math.round((forecastData[1].tempMin + forecastData[1].tempMax) / 2),
-                high: forecastData[1].tempMax,
-                low: forecastData[1].tempMin,
-              } : null,
-              day3: forecastData[2] ? {
-                condition: forecastData[2].condition,
-                temp: Math.round((forecastData[2].tempMin + forecastData[2].tempMax) / 2),
-                high: forecastData[2].tempMax,
-                low: forecastData[2].tempMin,
-              } : null,
-              day4: forecastData[3] ? {
-                condition: forecastData[3].condition,
-                temp: Math.round((forecastData[3].tempMin + forecastData[3].tempMax) / 2),
-                high: forecastData[3].tempMax,
-                low: forecastData[3].tempMin,
-              } : null,
-              day5: forecastData[4] ? {
-                condition: forecastData[4].condition,
-                temp: Math.round((forecastData[4].tempMin + forecastData[4].tempMax) / 2),
-                high: forecastData[4].tempMax,
-                low: forecastData[4].tempMin,
-              } : null,
-            },
-          };
-          
-          // IMPORTANT: Keep badges from original destination (calculated on map)
-          if (destination.badges) {
-            convertedForecast.badges = destination.badges;
-            convertedForecast._worthTheDriveData = destination._worthTheDriveData;
-            convertedForecast._worthTheDriveBudgetData = destination._worthTheDriveBudgetData;
-            convertedForecast._warmAndDryData = destination._warmAndDryData;
-            convertedForecast._beachParadiseData = destination._beachParadiseData;
-            convertedForecast._sunnyStreakData = destination._sunnyStreakData;
-            convertedForecast._weatherMiracleData = destination._weatherMiracleData;
-            convertedForecast._heatwaveData = destination._heatwaveData;
-            convertedForecast._snowKingData = destination._snowKingData;
-            convertedForecast._rainyDaysData = destination._rainyDaysData;
-            convertedForecast._weatherCurseData = destination._weatherCurseData;
-            convertedForecast._springAwakeningData = destination._springAwakeningData;
-          }
-          
-          setForecast(convertedForecast);
-          setIsLoading(false);
-          return;
-        } catch (fetchError) {
-          console.warn(`⚠️ Supabase fetch failed for ${destination.name}, using fallback:`, fetchError);
-        }
-      }
-      
-      // Fallback: Use destination data with generated forecast (5 days)
+      // PRIORITY 3: Fallback - generate forecast from current data (5 days)
       setForecast({
         ...destination,
         description: destination.description || destination.weatherDescription || `${destination.condition} conditions`,
         countryCode: destination.countryCode || destination.country_code,
         country_code: destination.country_code || destination.countryCode,
         forecast: {
-          today: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
-          tomorrow: { condition: destination.condition, temp: destination.temperature + 1, high: destination.temperature + 4, low: destination.temperature - 2 },
-          day3: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
-          day4: { condition: destination.condition, temp: destination.temperature - 1, high: destination.temperature + 2, low: destination.temperature - 4 },
-          day5: { condition: destination.condition, temp: destination.temperature, high: destination.temperature + 3, low: destination.temperature - 3 },
+          today: { condition: destination.condition, temp: destination.temperature, high: destination.temperature, low: destination.temperature - 3 },
+          tomorrow: { condition: destination.condition, temp: destination.temperature + 1, high: destination.temperature + 1, low: destination.temperature - 2 },
+          day3: { condition: destination.condition, temp: destination.temperature, high: destination.temperature, low: destination.temperature - 3 },
+          day4: { condition: destination.condition, temp: destination.temperature - 1, high: destination.temperature - 1, low: destination.temperature - 4 },
+          day5: { condition: destination.condition, temp: destination.temperature, high: destination.temperature, low: destination.temperature - 3 },
         }
       });
     } catch (err) {
@@ -378,7 +387,29 @@ const DestinationDetailScreen = ({ route, navigation }) => {
   };
 
   /**
-   * Find the best day from the forecast
+   * Generate date label for a forecast row
+   * dayIndex 0 = selected day, 1 = selected+1, etc.
+   */
+  const getForecastDayLabel = (dayIndex) => {
+    const totalOffset = selectedDateOffset + dayIndex;
+    if (totalOffset === 0) return t('destination.today');
+    if (totalOffset === 1) return t('destination.tomorrow');
+    const date = new Date();
+    date.setDate(date.getDate() + totalOffset);
+    return date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+
+  // Build the 5 forecast rows with labels (used by UI + findBestDay)
+  const forecastRows = [
+    { key: 'today', label: getForecastDayLabel(0), data: forecast?.forecast?.today },
+    { key: 'tomorrow', label: getForecastDayLabel(1), data: forecast?.forecast?.tomorrow },
+    { key: 'day3', label: getForecastDayLabel(2), data: forecast?.forecast?.day3 },
+    { key: 'day4', label: getForecastDayLabel(3), data: forecast?.forecast?.day4 },
+    { key: 'day5', label: getForecastDayLabel(4), data: forecast?.forecast?.day5 },
+  ];
+
+  /**
+   * Find the best day from the visible forecast rows
    * Scoring: sunny condition + highest temperature
    */
   const findBestDay = () => {
@@ -395,38 +426,34 @@ const DestinationDetailScreen = ({ route, navigation }) => {
       return 50;
     };
     
-    const days = [
-      { key: 'today', label: t('destination.today'), data: forecast.forecast.today },
-      { key: 'tomorrow', label: t('destination.tomorrow'), data: forecast.forecast.tomorrow },
-      { key: 'day3', label: t('destination.day3'), data: forecast.forecast.day3 },
-      { key: 'day4', label: t('destination.day4', { defaultValue: 'Tag 4' }), data: forecast.forecast.day4 },
-      { key: 'day5', label: t('destination.day5', { defaultValue: 'Tag 5' }), data: forecast.forecast.day5 },
-    ].filter(d => d.data);
-    
+    const days = forecastRows.filter(d => d.data);
     if (days.length === 0) return null;
     
-    // Calculate score for each day: condition (60%) + temperature (40%)
     const scored = days.map(day => {
       const temp = day.data.high ?? day.data.temp ?? 0;
       const cond = conditionScore(day.data.condition);
-      // Normalize temp: 0°C = 0, 30°C = 100
-      const tempNormalized = Math.max(0, Math.min(100, (temp / 30) * 100));
+      // Range: -20°C = 0, +35°C = 100 (handles winter temps properly)
+      const tempNormalized = Math.max(0, Math.min(100, ((temp + 20) / 55) * 100));
       const score = cond * 0.6 + tempNormalized * 0.4;
       return { ...day, score, temp, condition: day.data.condition };
     });
     
-    // Find highest scoring day
-    const best = scored.reduce((a, b) => a.score > b.score ? a : b);
-    
-    return best;
+    // a.score >= b.score: prefer earlier day on tie
+    return scored.reduce((a, b) => a.score >= b.score ? a : b);
   };
 
   const bestDay = findBestDay();
 
+  // Hero card: first forecast slot = the selected day
+  const selectedDayData = forecast?.forecast?.today;
+  const heroTemp = selectedDayData?.high ?? forecast.temperature;
+  const heroCondition = selectedDayData?.condition ?? forecast.condition;
+  const heroDescription = selectedDayData?.description ?? forecast.description;
+
   // Check if we need dark text (for cold/light backgrounds like snow or sunny+freezing)
   const needsDarkText = () => {
-    const condition = forecast.condition?.toLowerCase() || '';
-    const temp = forecast.temperature;
+    const condition = heroCondition?.toLowerCase() || '';
+    const temp = heroTemp;
     
     // Snow/ice conditions always need dark text
     if (condition.includes('snow') || condition.includes('ice') || condition.includes('freezing')) {
@@ -445,11 +472,21 @@ const DestinationDetailScreen = ({ route, navigation }) => {
   const textColor = useDarkText ? '#2b3e50' : '#fff';
   const subtitleColor = useDarkText ? '#4a5f6d' : 'rgba(255,255,255,0.9)';
 
+  // Date label for hero card
+  const formatDateLabel = (offset) => {
+    if (offset === 0) return null; // Don't show extra label for today
+    if (offset === 1) return 'Morgen';
+    const date = new Date();
+    date.setDate(date.getDate() + offset);
+    return date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+  const heroDateLabel = formatDateLabel(selectedDateOffset);
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { backgroundColor: getWeatherColor(forecast.condition, forecast.temperature) }]}>
+      <View style={[styles.header, { backgroundColor: getWeatherColor(heroCondition, heroTemp) }]}>
         {/* Großes Hintergrund-Icon */}
-        <Text style={styles.headerBgIcon}>{getWeatherIcon(forecast.condition)}</Text>
+        <Text style={styles.headerBgIcon}>{getWeatherIcon(heroCondition)}</Text>
         
         {/* Obere Zeile: Name & Temperatur */}
         <View style={styles.headerTop}>
@@ -461,11 +498,18 @@ const DestinationDetailScreen = ({ route, navigation }) => {
               </Text>
             )}
           </View>
-          <Text style={[styles.headerTemp, { color: textColor }]}>{Math.round(forecast.temperature)}°</Text>
+          <Text style={[styles.headerTemp, { color: textColor }]}>{heroTemp != null ? Math.round(heroTemp) : '?'}°</Text>
         </View>
         
+        {/* Date label when not today */}
+        {heroDateLabel && (
+          <View style={styles.heroDateBadge}>
+            <Text style={styles.heroDateBadgeText}>{heroDateLabel}</Text>
+          </View>
+        )}
+        
         {/* Untere Zeile: Description */}
-        <Text style={[styles.headerSubtitle, { color: subtitleColor }]}>{translateCondition(forecast.description)}</Text>
+        <Text style={[styles.headerSubtitle, { color: subtitleColor }]}>{translateCondition(heroDescription)}</Text>
         {/* TEMP DEBUG: Show attractiveness score */}
         <Text style={[styles.headerSubtitle, { color: subtitleColor, marginTop: 4, fontSize: 12, opacity: 0.7 }]}>
           Score: {forecast.attractivenessScore || forecast.attractiveness_score || destination.attractivenessScore || destination.attractiveness_score || '?'}
@@ -835,45 +879,30 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             </View>
           )}
           
-          <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
-            <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.today')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.today?.condition)}</Text>
-            <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast?.today?.high ?? forecast.temperature ?? '?'}° / {forecast.forecast?.today?.low ?? (forecast.temperature ? forecast.temperature - 3 : '?')}°
-            </Text>
-          </View>
-
-          <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
-            <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.tomorrow')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.tomorrow?.condition)}</Text>
-            <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast?.tomorrow?.high ?? '?'}° / {forecast.forecast?.tomorrow?.low ?? '?'}°
-            </Text>
-          </View>
-
-          <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
-            <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.day3')}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.day3?.condition)}</Text>
-            <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast?.day3?.high ?? '?'}° / {forecast.forecast?.day3?.low ?? '?'}°
-            </Text>
-          </View>
-
-          <View style={[styles.forecastItem, { borderBottomColor: theme.background }]}>
-            <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.day4', { defaultValue: 'Tag 4' })}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.day4?.condition)}</Text>
-            <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast?.day4?.high ?? '?'}° / {forecast.forecast?.day4?.low ?? '?'}°
-            </Text>
-          </View>
-
-          <View style={[styles.forecastItem, { borderBottomColor: 'transparent' }]}>
-            <Text style={[styles.forecastDay, { color: theme.text }]}>{t('destination.day5', { defaultValue: 'Tag 5' })}</Text>
-            <Text style={styles.forecastIcon}>{getWeatherIcon(forecast.forecast?.day5?.condition)}</Text>
-            <Text style={[styles.forecastTemp, { color: theme.textSecondary }]}>
-              {forecast.forecast?.day5?.high ?? '?'}° / {forecast.forecast?.day5?.low ?? '?'}°
-            </Text>
-          </View>
+          {forecastRows
+            .filter(day => day.data != null) // Only show days with actual data
+            .map((day, index, arr) => {
+            const isFirst = index === 0; // First row = the selected day
+            const isLast = index === arr.length - 1;
+            return (
+              <View
+                key={day.key}
+                style={[
+                  styles.forecastItem,
+                  { borderBottomColor: isLast ? 'transparent' : theme.background },
+                  isFirst && styles.forecastItemSelected,
+                ]}
+              >
+                <Text style={[styles.forecastDay, { color: isFirst ? '#FF8C42' : theme.text }]}>
+                  {day.label} {isFirst ? '◀' : ''}
+                </Text>
+                <Text style={styles.forecastIcon}>{getWeatherIcon(day.data?.condition)}</Text>
+                <Text style={[styles.forecastTemp, { color: isFirst ? '#FF8C42' : theme.textSecondary, fontWeight: isFirst ? '700' : '500' }]}>
+                  {day.data?.high ?? '?'}° / {day.data?.low ?? '?'}°
+                </Text>
+              </View>
+            );
+          })}
         </View>
 
         <View style={styles.actionsContainer}>
@@ -940,6 +969,20 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#fff',
     fontSize: 20,
+    fontWeight: '700',
+  },
+  heroDateBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 140, 66, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 6,
+    zIndex: 1,
+  },
+  heroDateBadgeText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '700',
   },
   header: {
@@ -1153,6 +1196,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
+  },
+  forecastItemSelected: {
+    backgroundColor: 'rgba(255, 140, 66, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    marginHorizontal: -8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF8C42',
   },
   forecastDay: {
     fontSize: 16,

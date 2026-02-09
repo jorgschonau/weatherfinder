@@ -429,7 +429,7 @@ export const getPlaceDetail = async (placeId, locale = 'en') => {
       snow_1h: weather.snow_volume,
     };
 
-    // Get 16-day forecast (using forecast_date)
+    // Max offset 5 + 5 display days = 10
     const { data: forecast, error: forecastError } = await supabase
       .from('weather_forecast')
       .select(`
@@ -441,7 +441,7 @@ export const getPlaceDetail = async (placeId, locale = 'en') => {
       .eq('place_id', placeId)
       .gte('forecast_date', today)
       .order('forecast_date', { ascending: true })
-      .limit(16);
+      .limit(10);
 
     if (forecastError) console.warn('Forecast fetch failed:', forecastError);
 
