@@ -370,7 +370,7 @@ const MapScreen = ({ navigation }) => {
         forecast_days: 6,
       });
 
-      const url = `https://api.open-meteo.com/v1/forecast?${params}`;
+      const url = `https://customer-api.open-meteo.com/v1/forecast?${params}&apikey=8cJ4NUh7dYHZF1uv`;
       const response = await fetch(url);
 
       if (!response.ok) return null;
@@ -906,7 +906,7 @@ const MapScreen = ({ navigation }) => {
         forecast_days: 6,
       });
 
-      const url = `https://api.open-meteo.com/v1/forecast?${params}`;
+      const url = `https://customer-api.open-meteo.com/v1/forecast?${params}&apikey=8cJ4NUh7dYHZF1uv`;
       const response = await fetch(url);
 
       if (!response.ok) {

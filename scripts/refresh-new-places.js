@@ -17,7 +17,10 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
+const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY || '';
+const OPEN_METEO_BASE_URL = OPEN_METEO_API_KEY
+  ? 'https://customer-api.open-meteo.com/v1'
+  : 'https://api.open-meteo.com/v1';
 const BATCH_SIZE = 20;
 const RATE_LIMIT_DELAY = 100;
 
@@ -72,7 +75,8 @@ async function fetchWeather(place) {
     forecast_days: 14
   });
 
-  const response = await fetch(`${OPEN_METEO_BASE_URL}/forecast?${params}`);
+  const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+  const response = await fetch(`${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`);
   if (!response.ok) throw new Error(`API error: ${response.status}`);
   return await response.json();
 }

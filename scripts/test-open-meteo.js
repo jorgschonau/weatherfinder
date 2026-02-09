@@ -4,10 +4,12 @@
  * Open-Meteo API Test Script
  * 
  * Tests the Open-Meteo API with sample locations
- * NO API KEY NEEDED! Just run it!
+ * Uses paid customer API if OPEN_METEO_API_KEY is set in .env
  * 
  * Run: node scripts/test-open-meteo.js
  */
+
+require('dotenv').config();
 
 // Sample test locations (Europe)
 const TEST_LOCATIONS = [
@@ -18,7 +20,10 @@ const TEST_LOCATIONS = [
   { name: 'Madrid, Spain', lat: 40.42, lon: -3.70 },
 ];
 
-const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
+const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY || '';
+const OPEN_METEO_BASE_URL = OPEN_METEO_API_KEY
+  ? 'https://customer-api.open-meteo.com/v1'
+  : 'https://api.open-meteo.com/v1';
 
 async function testCurrentWeather() {
   console.log('\n🧪 Testing Open-Meteo Current Weather API...\n');
@@ -41,7 +46,8 @@ async function testCurrentWeather() {
       ].join(','),
     });
 
-    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}`;
+    const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`;
     const response = await fetch(url);
     
     if (!response.ok) {
@@ -86,7 +92,8 @@ async function testForecast() {
       forecast_days: 16,
     });
 
-    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}`;
+    const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`;
     const response = await fetch(url);
     
     if (!response.ok) {
@@ -135,7 +142,8 @@ async function testBatchPerformance() {
         forecast_days: 16,
       });
       
-      return fetch(`${OPEN_METEO_BASE_URL}/forecast?${params}`)
+      const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+      return fetch(`${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`)
         .then(res => res.json());
     });
     

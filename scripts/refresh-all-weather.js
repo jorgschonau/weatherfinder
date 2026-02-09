@@ -18,8 +18,11 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
-const BATCH_SIZE = 50; // Process 50 locations in parallel (Open-Meteo can handle it)
+const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY || '';
+const OPEN_METEO_BASE_URL = OPEN_METEO_API_KEY
+  ? 'https://customer-api.open-meteo.com/v1'
+  : 'https://api.open-meteo.com/v1';
+const BATCH_SIZE = 50; // Process 50 locations in parallel
 const RATE_LIMIT_DELAY = 200; // 200ms between batches
 const MAX_RETRIES = 1; // Retry failed places once
 const FETCH_TIMEOUT = 10000; // 10s timeout per request
@@ -111,7 +114,8 @@ async function fetchWeather(place) {
     timezone: 'auto',
   });
 
-  const url = `${OPEN_METEO_BASE_URL}/forecast?${params}`;
+  const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+  const url = `${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`;
   
   // Add timeout using AbortController
   const controller = new AbortController();
@@ -260,6 +264,13 @@ async function main() {
   console.log('╔═══════════════════════════════════════════════════╗');
   console.log('║   Full Weather Refresh (All Locations)            ║');
   console.log('╚═══════════════════════════════════════════════════╝\n');
+
+  if (OPEN_METEO_API_KEY) {
+    console.log('🔑 Using paid Open-Meteo customer API');
+  } else {
+    console.log('⚠️  No OPEN_METEO_API_KEY set – using free API (rate limited)');
+  }
+  console.log('');
 
   const startTime = Date.now();
 

@@ -7,6 +7,11 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
+const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY || '';
+const OPEN_METEO_BASE_URL = OPEN_METEO_API_KEY
+  ? 'https://customer-api.open-meteo.com/v1'
+  : 'https://api.open-meteo.com/v1';
+
 async function main() {
   console.log('🧪 Testing weather fetch for 5 places...\n');
 
@@ -36,7 +41,8 @@ async function main() {
         timezone: 'auto',
       });
 
-      const url = `https://api.open-meteo.com/v1/forecast?${params}`;
+      const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+      const url = `${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`;
       const response = await fetch(url);
       const data = await response.json();
 

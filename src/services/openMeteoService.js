@@ -2,14 +2,15 @@ import { supabase } from '../config/supabase';
 
 /**
  * Open-Meteo Weather API Service
- * FREE, no API key needed, unlimited calls (fair use)
+ * Paid customer API with dedicated servers
  * 
  * Documentation: https://open-meteo.com/en/docs
  */
 
-const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
+const OPEN_METEO_API_KEY = '8cJ4NUh7dYHZF1uv';
+const OPEN_METEO_BASE_URL = 'https://customer-api.open-meteo.com/v1';
 const BATCH_SIZE = 20; // Process 20 locations in parallel
-const RATE_LIMIT_DELAY = 100; // 100ms between batches (be nice to the free API)
+const RATE_LIMIT_DELAY = 100; // 100ms between batches
 
 /**
  * Fetch current + forecast weather for a single location
@@ -62,7 +63,7 @@ export const fetchWeatherForPlace = async (place) => {
       timezone: 'auto',
     });
 
-    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}`;
+    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}&apikey=${OPEN_METEO_API_KEY}`;
     const response = await fetch(url);
 
     if (!response.ok) {

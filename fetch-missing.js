@@ -3,7 +3,10 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
+const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY || '';
+const OPEN_METEO_BASE_URL = OPEN_METEO_API_KEY
+  ? 'https://customer-api.open-meteo.com/v1'
+  : 'https://api.open-meteo.com/v1';
 const BATCH_SIZE = 10;
 const RATE_LIMIT_DELAY = 200;
 
@@ -57,7 +60,8 @@ async function fetchWeather(place) {
     timezone: 'auto',
   });
 
-  const url = `${OPEN_METEO_BASE_URL}/forecast?${params}`;
+  const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+  const url = `${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`API error: ${response.status}`);
   return await response.json();

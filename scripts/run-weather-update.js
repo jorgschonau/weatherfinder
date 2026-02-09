@@ -29,7 +29,10 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
+const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY || '';
+const OPEN_METEO_BASE_URL = OPEN_METEO_API_KEY
+  ? 'https://customer-api.open-meteo.com/v1'
+  : 'https://api.open-meteo.com/v1';
 
 /**
  * Fetch weather data from Open-Meteo for a single place
@@ -76,7 +79,8 @@ async function fetchWeatherForPlace(place) {
       timezone: 'auto',
     });
 
-    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}`;
+    const apiKeyParam = OPEN_METEO_API_KEY ? `&apikey=${OPEN_METEO_API_KEY}` : '';
+    const url = `${OPEN_METEO_BASE_URL}/forecast?${params}${apiKeyParam}`;
     const response = await fetch(url);
 
     if (!response.ok) {
