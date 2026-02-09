@@ -879,11 +879,10 @@ const DestinationDetailScreen = ({ route, navigation }) => {
             </View>
           )}
           
-          {forecastRows
-            .filter(day => day.data != null) // Only show days with actual data
-            .map((day, index, arr) => {
-            const isFirst = index === 0; // First row = the selected day
-            const isLast = index === arr.length - 1;
+          {forecastRows.map((day, index) => {
+            const isFirst = index === 0;
+            const isLast = index === forecastRows.length - 1;
+            const hasData = day.data != null;
             return (
               <View
                 key={day.key}
@@ -891,14 +890,15 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                   styles.forecastItem,
                   { borderBottomColor: isLast ? 'transparent' : theme.background },
                   isFirst && styles.forecastItemSelected,
+                  !hasData && { opacity: 0.4 },
                 ]}
               >
                 <Text style={[styles.forecastDay, { color: isFirst ? '#FF8C42' : theme.text }]}>
                   {day.label} {isFirst ? '◀' : ''}
                 </Text>
-                <Text style={styles.forecastIcon}>{getWeatherIcon(day.data?.condition)}</Text>
+                <Text style={styles.forecastIcon}>{hasData ? getWeatherIcon(day.data.condition) : '—'}</Text>
                 <Text style={[styles.forecastTemp, { color: isFirst ? '#FF8C42' : theme.textSecondary, fontWeight: isFirst ? '700' : '500' }]}>
-                  {day.data?.high ?? '?'}° / {day.data?.low ?? '?'}°
+                  {hasData ? `${day.data.high}° / ${day.data.low}°` : '—'}
                 </Text>
               </View>
             );
