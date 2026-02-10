@@ -26,7 +26,7 @@ const getDistanceKm = (lat1, lon1, lat2, lon2) => {
  * Mutates destination objects by adding 'badges' array
  * Limits "Worth the Drive" badges to top 3 destinations only
  */
-const applyBadgesToDestinations = (destinations, originLocation, originLat, originLon) => {
+export const applyBadgesToDestinations = (destinations, originLocation, originLat, originLon) => {
   if (!destinations || !originLocation) return;
   
   console.log(`🏆 applyBadgesToDestinations: ${destinations.length} destinations, origin: ${originLocation.name} at ${originLocation.temperature}°C`);

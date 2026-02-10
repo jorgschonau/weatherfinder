@@ -14,7 +14,7 @@ import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
-import { getWeatherForRadius, getWeatherIcon, getWeatherColor } from '../../usecases/weatherUsecases';
+import { getWeatherForRadius, getWeatherIcon, getWeatherColor, applyBadgesToDestinations } from '../../usecases/weatherUsecases';
 import { BadgeMetadata } from '../../domain/destinationBadge';
 import { playTickSound, playDingSound } from '../../utils/soundUtils';
 // Badges are now calculated in weatherUsecases.js, not here!
@@ -194,19 +194,45 @@ const MapScreen = ({ navigation }) => {
 
   /**
    * Derive display destinations from raw data + selected date offset.
-   * Picks the right day's temperature/condition from stored forecast data.
+   * Shifts temperature/condition/forecast AND recalculates badges.
    * NO network request needed when date changes!
    */
   const displayDestinations = useMemo(() => {
-    const FORECAST_KEY_MAP = { 0: 'today', 1: 'tomorrow', 2: 'day2', 3: 'day3', 4: 'day4', 5: 'day5' };
-    const forecastKey = FORECAST_KEY_MAP[selectedDateOffset] || 'today';
+    if (selectedDateOffset === 0) return destinations;
+
+    // Helper: build a shifted keyed forecast object from an array starting at offset
+    const buildShiftedForecast = (arr, offset) => {
+      const keys = ['today', 'tomorrow', 'day2', 'day3'];
+      const result = {};
+      keys.forEach((key, i) => {
+        const entry = arr[offset + i];
+        if (entry) {
+          result[key] = { ...entry };
+        }
+      });
+      return result;
+    };
     
-    if (selectedDateOffset === 0) return destinations; // No mapping needed for today
-    
-    return destinations.map(dest => {
-      // Open-Meteo sourced data (currentLocation, centerPoint) — use forecastDays array
+    const shifted = destinations.map(dest => {
+      // Open-Meteo sourced (currentLocation, centerPoint) — use forecastDays array
       if (dest.forecastDays && dest.forecastDays[selectedDateOffset]) {
         const dayData = dest.forecastDays[selectedDateOffset];
+        // Build forecast for badge calculation
+        const shiftedForecast = {};
+        const keys = ['today', 'tomorrow', 'day2', 'day3'];
+        keys.forEach((key, i) => {
+          const fd = dest.forecastDays[selectedDateOffset + i];
+          if (fd) {
+            shiftedForecast[key] = {
+              condition: fd.condition,
+              temp: fd.temperature,
+              high: Math.round(fd.temp_max || fd.temperature),
+              low: Math.round(fd.temp_min || fd.temperature - 3),
+              precipitation: fd.precipitation,
+              windSpeed: fd.windSpeed,
+            };
+          }
+        });
         return {
           ...dest,
           temperature: dayData.temperature,
@@ -215,10 +241,30 @@ const MapScreen = ({ navigation }) => {
           temp_min: dayData.temp_min,
           windSpeed: dayData.windSpeed,
           precipitation: dayData.precipitation,
+          forecast: shiftedForecast,
         };
       }
-      // Supabase sourced data (regular destinations) — use forecast keyed object
-      if (dest.forecast && dest.forecast[forecastKey]) {
+
+      // Supabase sourced (regular destinations) — use forecastArray
+      if (dest.forecastArray && dest.forecastArray.length > selectedDateOffset) {
+        const dayData = dest.forecastArray[selectedDateOffset];
+        return {
+          ...dest,
+          temperature: dayData.high ?? dayData.temp ?? dest.temperature,
+          condition: dayData.condition ?? dest.condition,
+          windSpeed: dayData.windSpeed ?? dest.windSpeed,
+          precipitation: dayData.precipitation ?? dest.precipitation,
+          sunshine_duration: dayData.sunshine_duration ?? dest.sunshine_duration,
+          description: dayData.description ?? dest.description,               // RAINY_DAYS: heavy rain check
+          weather_description: dayData.description ?? dest.weather_description, // alias
+          forecast: buildShiftedForecast(dest.forecastArray, selectedDateOffset),
+        };
+      }
+
+      // Fallback: use keyed forecast
+      const FORECAST_KEY_MAP = { 1: 'tomorrow', 2: 'day2', 3: 'day3', 4: 'day4', 5: 'day5' };
+      const forecastKey = FORECAST_KEY_MAP[selectedDateOffset];
+      if (dest.forecast && forecastKey && dest.forecast[forecastKey]) {
         const dayData = dest.forecast[forecastKey];
         return {
           ...dest,
@@ -228,7 +274,23 @@ const MapScreen = ({ navigation }) => {
       }
       return dest;
     });
+
+    // Recalculate badges with the shifted weather data
+    // IMPORTANT: centerPoint first (matches loadDestinations: centerPointWeather || currentLocationWeather)
+    const origin = shifted.find(d => d.isCenterPoint) || shifted.find(d => d.isCurrentLocation);
+    if (origin) {
+      console.log(`🏆 Recalculating badges for date offset ${selectedDateOffset} (origin: ${origin.temperature}°C)`);
+      applyBadgesToDestinations(shifted, origin, origin.lat, origin.lon);
+    }
+
+    return shifted;
   }, [destinations, selectedDateOffset]);
+
+  // Derive shifted center point weather from displayDestinations (respects date offset)
+  const displayCenterPointWeather = useMemo(() => {
+    if (!centerPointWeather) return null;
+    return displayDestinations.find(d => d.isCenterPoint) || centerPointWeather;
+  }, [displayDestinations, centerPointWeather]);
 
   // Update visible markers when display data or zoom changes (NOT on pan/bounds)
   useEffect(() => {
@@ -351,7 +413,7 @@ const MapScreen = ({ navigation }) => {
         console.warn('Reverse geocoding failed:', geoError);
       }
 
-      // Use Open-Meteo API for current location - fetch 6 days for date filter
+      // Use Open-Meteo API for current location - fetch 9 days (offset 5 + 3 badge lookahead + 1)
       const params = new URLSearchParams({
         latitude: location.latitude,
         longitude: location.longitude,
@@ -367,7 +429,7 @@ const MapScreen = ({ navigation }) => {
           'cloud_cover',
         ].join(','),
         timezone: 'auto',
-        forecast_days: 6,
+        forecast_days: 9,
       });
 
       const url = `https://customer-api.open-meteo.com/v1/forecast?${params}&apikey=8cJ4NUh7dYHZF1uv`;
@@ -887,7 +949,7 @@ const MapScreen = ({ navigation }) => {
         console.warn('Reverse geocoding failed:', geoError);
       }
 
-      // Use Open-Meteo API - fetch 6 days for date filter
+      // Use Open-Meteo API - fetch 9 days (offset 5 + 3 badge lookahead + 1)
       const params = new URLSearchParams({
         latitude: lat,
         longitude: lon,
@@ -903,7 +965,7 @@ const MapScreen = ({ navigation }) => {
           'cloud_cover',
         ].join(','),
         timezone: 'auto',
-        forecast_days: 6,
+        forecast_days: 9,
       });
 
       const url = `https://customer-api.open-meteo.com/v1/forecast?${params}&apikey=8cJ4NUh7dYHZF1uv`;
@@ -1126,23 +1188,23 @@ const MapScreen = ({ navigation }) => {
           />
         )}
 
-        {/* Custom Center Point Marker - Shows weather when available */}
+        {/* Custom Center Point Marker - Shows weather for SELECTED DATE */}
         {centerPoint && (
           <Marker
             coordinate={{ latitude: centerPoint.latitude, longitude: centerPoint.longitude }}
             anchor={{ x: 0.5, y: 0.5 }}
-            onPress={() => centerPointWeather && handleMarkerPress(centerPointWeather)}
+            onPress={() => displayCenterPointWeather && handleMarkerPress(displayCenterPointWeather)}
           >
-            {centerPointWeather ? (
+            {displayCenterPointWeather ? (
               <View style={[
                 styles.markerContainer,
-                { backgroundColor: getWeatherColor(centerPointWeather.condition, centerPointWeather.temperature) },
+                { backgroundColor: getWeatherColor(displayCenterPointWeather.condition, displayCenterPointWeather.temperature) },
                 styles.centerPointMarker
               ]}>
-                <Text style={styles.markerWeatherIcon}>{getWeatherIcon(centerPointWeather.condition)}</Text>
+                <Text style={styles.markerWeatherIcon}>{getWeatherIcon(displayCenterPointWeather.condition)}</Text>
                 <Text style={styles.markerTemp}>
-                  {centerPointWeather.temperature !== null && centerPointWeather.temperature !== undefined 
-                    ? Math.round(centerPointWeather.temperature) 
+                  {displayCenterPointWeather.temperature !== null && displayCenterPointWeather.temperature !== undefined 
+                    ? Math.round(displayCenterPointWeather.temperature) 
                     : '?'}°
                 </Text>
                 <View style={styles.centerPointBadgeIndicator}>

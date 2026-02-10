@@ -106,9 +106,9 @@ export const getPlacesWithWeather = async (filters = {}) => {
       return { places: [], error: null };
     }
     
-    // Query 2: Get weather for places (5 days for forecast display)
+    // Query 2: Get weather for places (9 days: offset 5 + 3 days badge lookahead + 1 safety)
     const placeIds = places.map(p => p.id);
-    const fallbackDate = new Date(new Date(targetDate).getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const fallbackDate = new Date(new Date(targetDate).getTime() + 8 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     console.log(`🌤️ Fetching weather for ${placeIds.length} places (${targetDate} to ${fallbackDate})...`);
     
     let allWeather = [];
@@ -123,7 +123,7 @@ export const getPlacesWithWeather = async (filters = {}) => {
         .select('place_id, forecast_date, temp_min, temp_max, weather_main, weather_description, weather_icon, wind_speed, sunshine_duration, fetched_at, humidity')
         .in('place_id', chunk)
         .gte('forecast_date', targetDate)
-        .lte('forecast_date', fallbackDate)  // 5 days for forecast
+        .lte('forecast_date', fallbackDate)  // 9 days for forecast + badge recalc
         .gte('fetched_at', sevenDaysAgo)
         .order('forecast_date', { ascending: true });
       
@@ -134,15 +134,21 @@ export const getPlacesWithWeather = async (filters = {}) => {
     
     console.log(`🌤️ Got ${allWeather.length} weather records (${targetDate} - ${fallbackDate})`);
     
-    // Build weather map with forecast for multiple days (5 days)
+    // Build weather map with forecast for multiple days (up to 9 days)
     const weatherMap = {};
+    // Also build raw arrays per place (for date-offset badge recalculation)
+    const forecastArrays = {};
     allWeather.forEach(w => {
       if (!weatherMap[w.place_id]) {
         weatherMap[w.place_id] = { today: null, tomorrow: null, day2: null, day3: null, day4: null, day5: null };
       }
+      if (!forecastArrays[w.place_id]) {
+        forecastArrays[w.place_id] = [];
+      }
+      forecastArrays[w.place_id].push(w);
       
       const entry = weatherMap[w.place_id];
-      // Fill in order: today, tomorrow, day2, day3, day4, day5
+      // Fill keyed map in order (still 6 keys for backward compat)
       if (!entry.today) entry.today = w;
       else if (!entry.tomorrow) entry.tomorrow = w;
       else if (!entry.day2) entry.day2 = w;
@@ -219,6 +225,19 @@ export const getPlacesWithWeather = async (filters = {}) => {
         } : null,
       };
       
+      // Build forecastArray from raw records (for date-offset badge recalculation)
+      const rawRecords = forecastArrays[p.id] || [];
+      const forecastArray = rawRecords.map(w => ({
+        condition: getCondition(w.weather_main),
+        temp: w.temp_max != null && w.temp_min != null ? Math.round((w.temp_min + w.temp_max) / 2) : null,
+        high: w.temp_max != null ? Math.round(w.temp_max) : null,
+        low: w.temp_min != null ? Math.round(w.temp_min) : null,
+        description: w.weather_description,
+        precipitation: w.precipitation_sum || 0,
+        windSpeed: Math.round(w.wind_speed || 0),
+        sunshine_duration: w.sunshine_duration || 0,
+      }));
+
       return {
         ...p,
         temp_min: today.temp_min,
@@ -230,7 +249,8 @@ export const getPlacesWithWeather = async (filters = {}) => {
         humidity: today.humidity,
         forecast_date: today.forecast_date,
         sunshine_duration: today.sunshine_duration,
-        forecast, // Include multi-day forecast!
+        forecast, // Keyed multi-day forecast (6 days)
+        forecastArray, // Raw array (up to 9 days) for badge recalculation
       };
     });
     
