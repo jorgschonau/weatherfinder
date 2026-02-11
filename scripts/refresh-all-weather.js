@@ -22,10 +22,10 @@ const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY || '';
 const OPEN_METEO_BASE_URL = OPEN_METEO_API_KEY
   ? 'https://customer-api.open-meteo.com/v1'
   : 'https://api.open-meteo.com/v1';
-const BATCH_SIZE = 50; // Process 50 locations in parallel
-const RATE_LIMIT_DELAY = 200; // 200ms between batches
-const MAX_RETRIES = 1; // Retry failed places once
-const FETCH_TIMEOUT = 10000; // 10s timeout per request
+const BATCH_SIZE = 30; // Process 30 locations in parallel (avoids late-batch timeouts)
+const RATE_LIMIT_DELAY = 500; // 500ms between batches
+const MAX_RETRIES = 2; // Retry failed places twice
+const FETCH_TIMEOUT = 15000; // 15s timeout per request
 
 /**
  * Weather code mapping
@@ -337,9 +337,15 @@ async function main() {
     totalSuccess += successCount;
     allFailedPlaces = allFailedPlaces.concat(failedPlaces || []);
 
-    // Rate limiting
+    // Rate limiting with progressive cooldown
     if (i < batches.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      if ((i + 1) % 100 === 0) {
+        // Every 100 batches: 5s cooldown to prevent API fatigue
+        console.log(`\n⏸️  Cooldown after ${i + 1} batches (5s)...\n`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      } else {
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      }
     }
   }
 
@@ -350,11 +356,12 @@ async function main() {
       if (allFailedPlaces.length === 0) break;
       
       console.log(`\n🔄 Retry ${retry}/${MAX_RETRIES}: ${allFailedPlaces.length} failed places...`);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay before retry
+      await new Promise(resolve => setTimeout(resolve, 3000)); // 3s delay before retry
       
+      const RETRY_BATCH_SIZE = 15; // Smaller batches for retries
       const retryBatches = [];
-      for (let i = 0; i < allFailedPlaces.length; i += BATCH_SIZE) {
-        retryBatches.push(allFailedPlaces.slice(i, i + BATCH_SIZE));
+      for (let i = 0; i < allFailedPlaces.length; i += RETRY_BATCH_SIZE) {
+        retryBatches.push(allFailedPlaces.slice(i, i + RETRY_BATCH_SIZE));
       }
       
       let stillFailed = [];
@@ -369,7 +376,7 @@ async function main() {
         stillFailed = stillFailed.concat(failedPlaces || []);
         
         if (i < retryBatches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1s between retry batches
         }
       }
       
