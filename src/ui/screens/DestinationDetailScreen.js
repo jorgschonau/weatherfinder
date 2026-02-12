@@ -86,8 +86,10 @@ const DestinationDetailScreen = ({ route, navigation }) => {
       setIsLoading(true);
       setError(null);
       
-      // PRIORITY 1: Fetch from Supabase if destination has an ID (gets full 10-day forecast!)
-      if (destination.id) {
+      // PRIORITY 1: Fetch from Supabase if destination has a valid UUID (gets full 10-day forecast!)
+      // Skip non-UUID IDs (e.g. legacy favourites with "lat_lon_timestamp" format)
+      const isValidUUID = destination.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(destination.id);
+      if (isValidUUID) {
         try {
           const { place, forecast: forecastData, error: fetchError } = await getPlaceDetail(destination.id, i18n.language);
           

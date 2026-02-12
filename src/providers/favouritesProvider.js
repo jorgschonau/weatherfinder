@@ -56,10 +56,10 @@ export const addFavourite = async (destination) => {
       return false;
     }
     
-    // Add timestamp and ID
+    // Add timestamp and local favourite ID (preserve original place ID for Supabase lookups)
     const favourite = {
       ...destination,
-      id: `${destination.lat}_${destination.lon}_${Date.now()}`,
+      favouriteId: `${destination.lat}_${destination.lon}_${Date.now()}`,
       savedAt: new Date().toISOString(),
     };
     

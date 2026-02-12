@@ -155,7 +155,7 @@ const FavouritesScreen = ({ navigation }) => {
         <FlatList
           data={favourites}
           renderItem={renderFavouriteItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.favouriteId || item.id || `${item.lat}_${item.lon}`}
           contentContainerStyle={styles.listContent}
         />
       )}
