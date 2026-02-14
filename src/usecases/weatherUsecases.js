@@ -75,7 +75,13 @@ export const applyBadgesToDestinations = (destinations, originLocation, originLa
     console.log(`  ${i+1}. ${c.name}: eff=${data.efficiency.toFixed(4)}, temp=${c.temperature}°C, delta=+${data.tempDelta}°C, dist=${data.distance}km`);
   });
   
+  // Count how many Worth the Drive candidates exist (before Budget steals them)
+  const allWorthTheDriveCandidates = destinations
+    .filter(d => !d.isCurrentLocation && d.badges.includes('WORTH_THE_DRIVE'));
+  let remainingWTD = allWorthTheDriveCandidates.length;
+
   // Award badge to top N budget candidates (with distance check)
+  // But don't steal ALL Worth the Drive candidates!
   const selectedBudgetBadges = [];
   for (const candidate of budgetCandidates) {
     if (selectedBudgetBadges.length >= MAX_BUDGET_BADGES) break;
@@ -91,9 +97,19 @@ export const applyBadgesToDestinations = (destinations, originLocation, originLa
     });
     
     if (!tooClose) {
+      // Don't steal the last Worth the Drive candidate
+      const hasWTD = candidate.badges.includes('WORTH_THE_DRIVE');
+      if (hasWTD && remainingWTD <= 1) {
+        console.log(`💰 Skipped ${candidate.name} for Budget (would leave 0 Worth the Drive badges)`);
+        continue;
+      }
+
       candidate.badges.push('WORTH_THE_DRIVE_BUDGET');
       // REMOVE Worth the Drive if present (Budget is exclusive!)
-      candidate.badges = candidate.badges.filter(b => b !== 'WORTH_THE_DRIVE');
+      if (hasWTD) {
+        candidate.badges = candidate.badges.filter(b => b !== 'WORTH_THE_DRIVE');
+        remainingWTD--;
+      }
       selectedBudgetBadges.push(candidate);
       console.log(
         `💰 ${candidate.name}: Budget #${selectedBudgetBadges.length}! ` +

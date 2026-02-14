@@ -109,6 +109,7 @@ async function fetchWeather(place) {
       'sunrise',
       'sunset',
       'sunshine_duration',
+      'relative_humidity_2m_mean',
     ].join(','),
     forecast_days: 14,
     timezone: 'auto',
@@ -197,6 +198,7 @@ async function saveForecast(placeId, daily) {
       // rain_probability ENTFERNT (Duplikat von precipitation_probability)
       rain_volume: daily.rain_sum[actualIndex],
       snow_volume: daily.snowfall_sum[actualIndex],
+      humidity: daily.relative_humidity_2m_mean?.[actualIndex] ?? null,
       sunrise: daily.sunrise?.[actualIndex] ? new Date(daily.sunrise[actualIndex]).toISOString() : null,
       sunset: daily.sunset?.[actualIndex] ? new Date(daily.sunset[actualIndex]).toISOString() : null,
       sunshine_duration: daily.sunshine_duration?.[actualIndex] || null,
