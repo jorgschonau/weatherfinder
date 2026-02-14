@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import { View, Text, Image, Animated, StyleSheet } from 'react-native';
 
 /**
  * Animated Badge Component with BIG pulse and fade-in effects
@@ -76,7 +76,11 @@ const AnimatedBadge = ({ icon, color, delay = 0 }) => {
         },
       ]}
     >
-      <Text style={styles.badgeIcon}>{icon}</Text>
+      {typeof icon === 'string' ? (
+        <Text style={styles.badgeIcon}>{icon}</Text>
+      ) : (
+        <Image source={icon} style={styles.badgeImage} />
+      )}
     </Animated.View>
   );
 };
@@ -98,6 +102,12 @@ const styles = StyleSheet.create({
   },
   badgeIcon: {
     fontSize: 18,
+  },
+  badgeImage: {
+    width: 28,
+    height: 28,
+    resizeMode: 'cover',
+    borderRadius: 14,
   },
 });
 

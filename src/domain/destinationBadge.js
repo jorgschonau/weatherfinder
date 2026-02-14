@@ -41,7 +41,7 @@ export const BadgeMetadata = {
     priority: 3,
   },
   [DestinationBadge.HEATWAVE]: {
-    icon: '🔥',
+    icon: require('../../assets/heatwave_chatgpt5.jpg'),
     color: '#FF5722', // Red/Orange
     priority: 4,
   },
@@ -564,6 +564,13 @@ export function calculateHeatwave(destination) {
     );
   }
   
+  // Calculate average temp across hot days
+  const temps = [currentTemp];
+  if (forecast?.today?.high != null) temps.push(forecast.today.high);
+  if (forecast?.tomorrow?.high != null) temps.push(forecast.tomorrow.high);
+  if (forecast?.day3?.high != null) temps.push(forecast.day3.high);
+  const avgTemp = temps.length > 0 ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : 0;
+
   // Badge criteria: 3+ days >= 34°C AND no rain
   const MIN_HOT_DAYS = 3;
   const shouldAward = hotDays >= MIN_HOT_DAYS && !hasRain;
@@ -571,7 +578,9 @@ export function calculateHeatwave(destination) {
   return {
     shouldAward,
     hotDays,
+    days: hotDays,
     maxTemp: Math.round(maxTemp),
+    avgTemp,
   };
 }
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -597,7 +598,7 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                   return `+${Math.round(miracleData.tempGain)}°C bald ☀️`;
                 }
                 if (isHeatwave && heatwaveData) {
-                  return `${heatwaveData.days} Tage 🔥 | Ø ${heatwaveData.avgTemp}°C`;
+                  return `${heatwaveData.days} Tage Hitze | Ø ${heatwaveData.avgTemp}°C`;
                 }
                 if (isSnowKing && snowKingData) {
                   return `${snowKingData.snowDays} Tage ❄️ | ${snowKingData.totalSnowfall}cm`;
@@ -673,7 +674,11 @@ const DestinationDetailScreen = ({ route, navigation }) => {
                       ]}
                     >
                       <View style={[styles.badgeIconContainer, { backgroundColor: metadata.color }]}>
-                        <Text style={styles.badgeCardIcon}>{metadata.icon}</Text>
+                        {typeof metadata.icon === 'string' ? (
+                          <Text style={styles.badgeCardIcon}>{metadata.icon}</Text>
+                        ) : (
+                          <Image source={metadata.icon} style={{ width: 56, height: 56, resizeMode: 'cover', borderRadius: 28 }} />
+                        )}
                       </View>
                       <View style={styles.badgeContent}>
                         <Text style={[styles.badgeName, { color: theme.text }]}>

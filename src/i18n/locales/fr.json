@@ -184,7 +184,7 @@
     "weathermiracle": "Miracle Météo",
     "weathermiracleDescription": "Le lieu se transforme: Mauvais aujourd'hui → Ensoleillé & chaud demain!",
     "heatwave": "Canicule",
-    "heatwaveDescription": "Très chaud (>30°C) pendant 2+ jours",
+    "heatwaveDescription": "3+ jours au-dessus de 34°C sans pluie",
     "snowking": "Roi des Neiges",
     "snowkingDescription": "Beaucoup de neige (10+ mm) et assez froid - parfait pour le ski",
     "rainydays": "Jours Pluvieux",
